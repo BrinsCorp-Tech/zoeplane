@@ -1,0 +1,47 @@
+{
+  "$schema": "https://design-tokens.github.io/community-group/format/",
+  "$metadata": {
+    "description": "ZoePlane design tokens — DTCG W3C v1, October 2025",
+    "version": "0.1.0",
+    "generatedFrom": "docs/design/dark-mode-architecture.md (v1.1)",
+    "status": "seed — replace with Token Studio DTCG export when Figma Variables are authored",
+    "note": "These seed values mirror src/styles/tokens.css. Once the Style Dictionary pipeline is active, tokens.css is a BUILD ARTIFACT generated from this file — do not hand-edit tokens.css after that."
+  },
+  "color": {
+    "gray": {
+      "50":  { "$value": "oklch(0.985 0.002 250)", "$type": "color" },
+      "100": { "$value": "oklch(0.965 0.003 250)", "$type": "color" },
+      "200": { "$value": "oklch(0.920 0.005 250)", "$type": "color" },
+      "300": { "$value": "oklch(0.860 0.007 250)", "$type": "color" },
+      "400": { "$value": "oklch(0.730 0.010 250)", "$type": "color" },
+      "500": { "$value": "oklch(0.580 0.012 250)", "$type": "color" },
+      "600": { "$value": "oklch(0.460 0.012 250)", "$type": "color" },
+      "700": { "$value": "oklch(0.340 0.012 250)", "$type": "color" },
+      "800": { "$value": "oklch(0.230 0.010 250)", "$type": "color" },
+      "850": { "$value": "oklch(0.180 0.010 250)", "$type": "color" },
+      "900": { "$value": "oklch(0.140 0.008 250)", "$type": "color" },
+      "950": { "$value": "oklch(0.090 0.005 250)", "$type": "color" },
+      "975": { "$value": "oklch(0.060 0.003 250)", "$type": "color" }
+    },
+    "accent": {
+      "50":  { "$value": "oklch(0.970 0.020 260)", "$type": "color" },
+      "100": { "$value": "oklch(0.940 0.040 260)", "$type": "color" },
+      "200": { "$value": "oklch(0.890 0.080 260)", "$type": "color" },
+      "400": { "$value": "oklch(0.720 0.150 260)", "$type": "color" },
+      "500": { "$value": "oklch(0.640 0.180 260)", "$type": "color" },
+      "600": { "$value": "oklch(0.560 0.200 260)", "$type": "color" },
+      "700": { "$value": "oklch(0.480 0.180 260)", "$type": "color" },
+      "800": { "$value": "oklch(0.400 0.150 260)", "$type": "color" }
+    },
+    "info": {
+      "400": { "$value": "oklch(0.720 0.130 220)", "$type": "color" },
+      "500": { "$value": "oklch(0.620 0.150 220)", "$type": "color" },
+      "600": { "$value": "oklch(0.540 0.150 220)", "$type": "color" }
+    },
+    "quarantine": {
+      "400": { "$value": "oklch(0.700 0.150 320)", "$type": "color" },
+      "500": { "$value": "oklch(0.580 0.170 320)", "$type": "color" },
+      "600": { "$value": "oklch(0.480 0.170 320)", "$type": "color" }
+    }
+  }
+}

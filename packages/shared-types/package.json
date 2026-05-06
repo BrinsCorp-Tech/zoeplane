@@ -1,0 +1,17 @@
+{
+  "name": "@zoeplane/shared-types",
+  "version": "0.1.0",
+  "description": "ZoePlane shared TypeScript types — consumed by both UI (src/) and sidecar/",
+  "private": true,
+  "type": "module",
+  "main": "src/index.ts",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "typescript": "^5.5.0"
+  }
+}

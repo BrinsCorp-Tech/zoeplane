@@ -1,0 +1,46 @@
+[package]
+name = "zoeplane"
+version = "0.1.0"
+description = "ZoePlane — OSS cockpit and plugin host for Claude-Code-native teams"
+authors = ["BrinsCorp-Tech"]
+license = "Apache-2.0"
+repository = "https://github.com/BrinsCorp-Tech/zoeplane"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[lib]
+# The `_lib` entry point is used by `tauri-build` for mobile targets.
+# Desktop uses main.rs directly.
+name = "zoeplane_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = [] }
+tauri-plugin-shell = "2"
+tauri-plugin-fs = "2"
+tauri-plugin-dialog = "2"
+tauri-plugin-notification = "2"
+tauri-plugin-process = "2"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+tokio = { version = "1", features = ["full"] }
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+
+[profile.release]
+# Optimize for binary size for distribution builds.
+# LTO reduces binary size at the cost of longer link times — acceptable for CI releases.
+opt-level = "z"
+lto = true
+codegen-units = 1
+panic = "abort"
+strip = true
+
+[profile.dev]
+# Fast incremental compilation in dev; no size optimization.
+opt-level = 0
+debug = true

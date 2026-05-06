@@ -1,0 +1,79 @@
+# ZoePlane — .gitignore
+
+# ---- Dependencies ----
+node_modules/
+.bun-cache/
+.pnpm-store/
+
+# ---- Build outputs ----
+src/dist/
+sidecar/dist/
+packages/*/dist/
+target/           # Rust/Cargo build artifacts
+src-tauri/target/
+
+# ---- Tauri bundle artifacts ----
+src-tauri/gen/
+
+# ---- OS / Editor ----
+.DS_Store
+.DS_Store?
+._*
+Thumbs.db
+*.swp
+*.swo
+.idea/
+.vscode/
+*.tsbuildinfo
+.cache/
+
+# ---- Environment & secrets ----
+.env
+.env.local
+.env.*.local
+*.pem
+*.key
+*.p12
+*.pfx
+*.cer
+
+# ---- Local Tauri credentials (never commit signing keys) ----
+src-tauri/signing/
+
+# ---- SQLite dev databases ----
+*.db
+*.db-shm
+*.db-wal
+
+# ---- Logs ----
+*.log
+logs/
+
+# ---- Storybook ----
+storybook-static/
+
+# ---- Chromatic ----
+.chromatic/
+
+# ---- Test coverage ----
+coverage/
+.nyc_output/
+
+# ---- Bun lockfile — commit bun.lockb, not this ----
+# bun.lockb is committed; exclude older lock formats
+package-lock.json
+pnpm-lock.yaml
+yarn.lock
+
+# ---- Private strategic docs (not for OSS public repo) ----
+# Strategic planning, requirements, design specs, and internal handoffs
+# stay local. The OSS repo ships code + LICENSE + README + CLAUDE.md only.
+docs/architecture/
+docs/design/
+docs/discovery/
+docs/epics/
+docs/handoffs/
+
+# ---- Local working files (not for OSS public repo) ----
+whats-next.md
+.claude/

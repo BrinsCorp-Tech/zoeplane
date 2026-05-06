@@ -1,0 +1,81 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "ZoePlane",
+  "version": "0.1.0",
+  "identifier": "com.brinscorp.zoeplane",
+  "build": {
+    "frontendDist": "../src/dist",
+    "devUrl": "http://localhost:5173",
+    "beforeDevCommand": "bun run dev",
+    "beforeBuildCommand": "bun run build"
+  },
+  "app": {
+    "windows": [
+      {
+        "label": "main",
+        "title": "ZoePlane",
+        "width": 1280,
+        "height": 800,
+        "minWidth": 1024,
+        "minHeight": 720,
+        "resizable": true,
+        "fullscreen": false,
+        "center": true,
+        "decorations": true,
+        "transparent": false,
+        "theme": "System"
+      }
+    ],
+    "security": {
+      "csp": null
+    }
+  },
+  "bundle": {
+    "active": true,
+    "targets": "all",
+    "icon": [
+      "icons/32x32.png",
+      "icons/128x128.png",
+      "icons/128x128@2x.png",
+      "icons/icon.icns",
+      "icons/icon.ico"
+    ],
+    "externalBin": [
+      "binaries/zoeplane-sidecar"
+    ]
+  },
+  "plugins": {
+    "shell": {
+      "all": false,
+      "open": true,
+      "scope": [
+        {
+          "name": "zoeplane-sidecar",
+          "cmd": "zoeplane-sidecar",
+          "args": true,
+          "sidecar": true
+        }
+      ]
+    },
+    "fs": {
+      "all": false,
+      "readFile": true,
+      "writeFile": true,
+      "readDir": true,
+      "copyFile": false,
+      "createDir": true,
+      "removeDir": false,
+      "removeFile": false,
+      "renameFile": true,
+      "exists": true,
+      "scope": {
+        "allow": [
+          "$HOME/.claude/**",
+          "$APPDATA/zoeplane/**",
+          "$APP/**"
+        ],
+        "deny": []
+      }
+    }
+  }
+}

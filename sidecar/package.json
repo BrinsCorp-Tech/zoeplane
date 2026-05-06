@@ -1,0 +1,24 @@
+{
+  "name": "@zoeplane/sidecar",
+  "version": "0.1.0",
+  "description": "ZoePlane Node.js sidecar — IPC server, Path A (Direct SDK) + Path B (CLI harness), plugin host, evaluator, FS indexer, SQLite",
+  "private": true,
+  "type": "module",
+  "main": "src/index.ts",
+  "scripts": {
+    "dev": "bun run --watch src/index.ts",
+    "build": "bun build src/index.ts --compile --outfile dist/zoeplane-sidecar",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint src --ext .ts"
+  },
+  "dependencies": {
+    "@zoeplane/shared-types": "workspace:*"
+  },
+  "devDependencies": {
+    "typescript": "^5.5.0",
+    "bun-types": "latest"
+  },
+  "engines": {
+    "bun": ">=1.1.0"
+  }
+}

@@ -1,0 +1,19 @@
+# ZoePlane — Bun configuration
+# Bun is the preferred runtime and package manager.
+# If bun is not available, pnpm is the fallback — run:
+#   npm install -g pnpm && pnpm install
+# and replace `bun run` with `pnpm run` in all scripts.
+
+[install]
+# Prefer exact versions for reproducibility across CI and developer machines
+exact = true
+
+[install.cache]
+dir = ".bun-cache"
+
+[run]
+# bun run inherits the workspace layout from package.json workspaces
+
+[build]
+# Source maps for development; tree-shaking enabled by default
+sourcemap = "linked"

@@ -1,0 +1,141 @@
+/*
+ * ZoePlane — Global styles
+ * Load order: tokens.css → globals.css → typography.css → component styles
+ *
+ * This file:
+ *   1. Pulls in design tokens
+ *   2. Applies Tailwind v4 directives
+ *   3. CSS baseline reset
+ *   4. Scrollbar theming
+ *   5. Focus-indicator system (WCAG 2.2 AA)
+ */
+
+@import "./tokens.css";
+@import "./typography.css";
+
+/* Tailwind v4 CSS-first directives */
+@import "tailwindcss";
+
+/* ---- Baseline reset ---- */
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html {
+  font-size: 100%; /* 16px base; fluid type uses rem + vw via clamp() */
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+  /* Theme attribute set by user preference. "system" defers to prefers-color-scheme. */
+  /* Default: system. App sets to "light" or "dark" before first paint. */
+}
+
+body {
+  font-family: var(--font-sans);
+  font-size: var(--text-base);
+  line-height: var(--leading-normal);
+  color: var(--color-foreground);
+  background-color: var(--color-background);
+  /* Prevent text selection on double-click in drag surfaces */
+  -webkit-user-select: none;
+  user-select: none;
+  /* Allow text selection within content areas (override in content components) */
+}
+
+/* Allow text selection in content-editable and explicit text zones */
+[data-selectable],
+input,
+textarea,
+[contenteditable] {
+  -webkit-user-select: text;
+  user-select: text;
+}
+
+/* ---- Focus indicator system (WCAG 2.2 AA, 3:1 against neighbors) ---- */
+/* Use outline instead of box-shadow so it works in forced-colors mode */
+:focus-visible {
+  outline: 2px solid var(--color-focus-ring);
+  outline-offset: 2px;
+}
+
+/* Forced-colors (Windows High Contrast Mode) fallback */
+@media (forced-colors: active) {
+  :focus-visible {
+    outline-color: Highlight;
+  }
+}
+
+/* Remove default focus outline; rely on :focus-visible */
+:focus:not(:focus-visible) {
+  outline: none;
+}
+
+/* ---- Custom scrollbars ---- */
+/* WebKit (Chrome, Safari, Tauri WebViews) */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--color-scrollbar-track);
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--color-scrollbar-thumb);
+  border-radius: var(--radius-full);
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--color-border-strong);
+}
+
+/* Firefox */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--color-scrollbar-thumb) var(--color-scrollbar-track);
+}
+
+/* ---- Code / mono surfaces ---- */
+code,
+kbd,
+samp,
+pre {
+  font-family: var(--font-mono);
+  font-size: var(--text-mono-base);
+}
+
+/* ---- Media baseline ---- */
+img,
+svg {
+  display: block;
+  max-width: 100%;
+}
+
+/* ---- Interactive baseline ---- */
+button,
+a {
+  cursor: pointer;
+}
+
+button:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+/* ---- Reduced-motion: disable ALL animations as a safety net ----
+   Individual components use CSS vars (--duration-*) which zero out via
+   the tokens.css @media block. This rule catches any hardcoded transitions. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}

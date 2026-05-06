@@ -1,0 +1,17 @@
+{
+  "name": "@zoeplane/design-tokens",
+  "version": "0.1.0",
+  "description": "ZoePlane design tokens — DTCG JSON source → Style Dictionary build pipeline",
+  "private": true,
+  "type": "module",
+  "main": "src/index.ts",
+  "scripts": {
+    "build": "style-dictionary build",
+    "check-tokens": "node scripts/check-token-completeness.mjs",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "style-dictionary": "^4.0.0",
+    "typescript": "^5.5.0"
+  }
+}

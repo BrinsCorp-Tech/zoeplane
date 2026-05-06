@@ -1,0 +1,18 @@
+<!doctype html>
+<html lang="en" data-theme="system">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>ZoePlane</title>
+    <!--
+      data-theme is set to "system" initially; the React app reads
+      user_preferences.theme from SQLite and flips the attribute to "light"
+      or "dark" before first paint to avoid FOUC.
+      Theme switching is always instant (no CSS transition) per ux-spec Principle 5.
+    -->
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>
