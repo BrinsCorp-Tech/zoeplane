@@ -1,6 +1,5 @@
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
-// @ts-expect-error — Tauri Vite plugin types may not resolve until install
 import { internalIpV4 } from "internal-ip";
 
 // Vite dev server port. 5173 is the Tauri default.
@@ -49,6 +48,10 @@ export default defineConfig(async () => {
     resolve: {
       alias: {
         "@": "/src",
+        // @host/ → Tauri host bindings (src-tauri/)
+        "@host": "../src-tauri",
+        // @sdk/ → Plugin SDK public surface (packages/plugin-sdk/src/)
+        "@sdk": "../packages/plugin-sdk/src",
       },
     },
   };
