@@ -1,0 +1,261 @@
+// ZoePlane — Tauri 2.0 application core (lib entry)
+//
+// This file contains the full Tauri application setup including:
+//   - Structured tracing/logging
+//   - Sidecar process lifecycle (spawn, port-capture, supervised restart on crash)
+//   - Health-check IPC wiring
+//   - Clean shutdown on window close
+//
+// main.rs is a thin wrapper that calls run() — required by Tauri 2's mobile
+// build path which links this crate as a library.
+
+mod ipc;
+
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::{Arc, Mutex};
+use std::time::Duration;
+
+use tauri::{AppHandle, Emitter, Manager, RunEvent, WindowEvent};
+use tauri_plugin_shell::process::CommandEvent;
+use tauri_plugin_shell::ShellExt;
+use tracing::{error, info, warn};
+use tracing_subscriber::{EnvFilter, FmtSubscriber};
+
+// ---------------------------------------------------------------------------
+// App state — shared across Tauri commands
+// ---------------------------------------------------------------------------
+
+/// Stores the sidecar's HTTP loopback port once the port-announcement JSON has
+/// been parsed from stdout.  `None` until the sidecar announces its port.
+pub struct SidecarPort(pub Mutex<Option<u16>>);
+
+/// Shared `reqwest::Client` managed as Tauri state so the connection pool is
+/// reused across `sidecar_status` calls rather than allocated per-call.
+pub struct HttpClient(pub reqwest::Client);
+
+/// Holds the sidecar child handle so we can call `kill()` on shutdown.
+/// The `shutting_down` flag is set to `true` before `kill()` is called so the
+/// event-loop task can distinguish an intentional shutdown from an unexpected crash.
+pub struct SidecarHandle {
+    pub child: Mutex<Option<tauri_plugin_shell::process::CommandChild>>,
+    pub shutting_down: Arc<AtomicBool>,
+}
+
+// ---------------------------------------------------------------------------
+// Application entry point
+// ---------------------------------------------------------------------------
+
+pub fn run() {
+    // Structured logging to stderr. Set RUST_LOG=debug for verbose output.
+    let subscriber = FmtSubscriber::builder()
+        .with_env_filter(EnvFilter::from_default_env())
+        .finish();
+    tracing::subscriber::set_global_default(subscriber)
+        .expect("Failed to set tracing subscriber");
+
+    info!("ZoePlane starting");
+
+    tauri::Builder::default()
+        .plugin(tauri_plugin_shell::init())
+        .plugin(tauri_plugin_fs::init())
+        .plugin(tauri_plugin_dialog::init())
+        .plugin(tauri_plugin_notification::init())
+        .plugin(tauri_plugin_process::init())
+        // Register shared state containers before setup runs.
+        .manage(SidecarPort(Mutex::new(None)))
+        .manage(SidecarHandle {
+            child: Mutex::new(None),
+            shutting_down: Arc::new(AtomicBool::new(false)),
+        })
+        .manage(HttpClient(
+            reqwest::Client::builder()
+                .timeout(Duration::from_millis(100))
+                .build()
+                .expect("reqwest client init"),
+        ))
+        // IPC commands — see ipc.rs for implementations.
+        .invoke_handler(tauri::generate_handler![
+            ipc::ping,
+            ipc::sidecar_status,
+        ])
+        .setup(|app| {
+            info!("App setup — spawning sidecar");
+            spawn_sidecar(app.handle())?;
+            Ok(())
+        })
+        .build(tauri::generate_context!())
+        .expect("Error building ZoePlane")
+        .run(|app_handle, event| {
+            // RunEvent::WindowEvent is matched to catch CloseRequested on the
+            // main window so we can kill the sidecar before Tauri exits.
+            if let RunEvent::WindowEvent {
+                event: WindowEvent::CloseRequested { .. },
+                ..
+            } = &event
+            {
+                shutdown_sidecar(app_handle);
+            }
+
+            // RunEvent::Exit fires when all windows are closed (or on macOS
+            // after Cmd+Q). Belt-and-suspenders — also kill from here.
+            if let RunEvent::Exit = &event {
+                shutdown_sidecar(app_handle);
+            }
+        });
+}
+
+// ---------------------------------------------------------------------------
+// Sidecar spawn + supervision
+// ---------------------------------------------------------------------------
+
+/// Spawns the sidecar binary using tauri-plugin-shell, wires stdout/stderr
+/// event handlers, and stores the child handle in app state.
+fn spawn_sidecar(app: &AppHandle) -> Result<(), Box<dyn std::error::Error>> {
+    let (mut rx, child) = app
+        .shell()
+        .sidecar("zoeplane-sidecar")
+        .map_err(|e| {
+            error!(?e, "Failed to create sidecar command");
+            e
+        })?
+        .spawn()
+        .map_err(|e| {
+            error!(?e, "Failed to spawn sidecar process");
+            e
+        })?;
+
+    info!("Sidecar spawned successfully");
+
+    // Store the child handle so shutdown_sidecar can kill it.
+    // Also clone the shutdown flag so the event-loop task can read it.
+    let shutdown_flag = {
+        let handle_state = app.state::<SidecarHandle>();
+        let mut guard = handle_state.child.lock().unwrap();
+        *guard = Some(child);
+        Arc::clone(&handle_state.shutting_down)
+    };
+
+    // Clone AppHandle for the async task — it's cheap (Arc internally).
+    let app_handle = app.clone();
+
+    // Spawn a task to process sidecar events on the sidecar's event channel.
+    // Use tauri::async_runtime::spawn (idiomatic Tauri 2) instead of tokio::spawn.
+    tauri::async_runtime::spawn(async move {
+        while let Some(event) = rx.recv().await {
+            match event {
+                CommandEvent::Stdout(line_bytes) => {
+                    let line = String::from_utf8_lossy(&line_bytes);
+                    handle_sidecar_stdout(&app_handle, line.trim());
+                }
+                CommandEvent::Stderr(line_bytes) => {
+                    let line = String::from_utf8_lossy(&line_bytes);
+                    // Sidecar writes structured JSON to stderr for lifecycle events.
+                    info!(target: "sidecar-lifecycle", stderr = %line.trim());
+                }
+                CommandEvent::Terminated(payload) => {
+                    let code = payload.code;
+                    let signal = payload.signal;
+                    if shutdown_flag.load(Ordering::SeqCst) {
+                        // Intentional shutdown — kill() was called by shutdown_sidecar().
+                        info!(
+                            target: "sidecar-lifecycle",
+                            exit_code = ?code,
+                            signal = ?signal,
+                            "Sidecar process terminated (intentional shutdown)"
+                        );
+                    } else {
+                        // AC4: log unexpected exit code + cause to sidecar-lifecycle channel.
+                        error!(
+                            target: "sidecar-lifecycle",
+                            exit_code = ?code,
+                            signal = ?signal,
+                            "Sidecar process terminated unexpectedly"
+                        );
+                    }
+                    // Surface non-fatal error state: clear the stored port so
+                    // subsequent health-check calls fail loudly rather than
+                    // attempting a dead HTTP endpoint.
+                    let port_state = app_handle.state::<SidecarPort>();
+                    let mut port_guard = port_state.0.lock().unwrap();
+                    *port_guard = None;
+                    // Clear handle — process is gone.
+                    let handle_state = app_handle.state::<SidecarHandle>();
+                    let mut handle_guard = handle_state.child.lock().unwrap();
+                    *handle_guard = None;
+                }
+                CommandEvent::Error(msg) => {
+                    error!(target: "sidecar-lifecycle", error = %msg, "Sidecar I/O error");
+                }
+                // Exhaustive — other variants (if any added in future plugin
+                // versions) are intentionally ignored with a log.
+                _ => {
+                    warn!(target: "sidecar-lifecycle", "Unhandled sidecar event variant");
+                }
+            }
+        }
+        info!(target: "sidecar-lifecycle", "Sidecar event channel closed");
+    });
+
+    Ok(())
+}
+
+/// Parses the port-announcement JSON from the sidecar's stdout and stores it.
+///
+/// Expected format: `{"port": 12345}`
+///
+/// Any other stdout line is logged at WARN — nothing else should write to
+/// stdout in Sprint 1. Future epics may extend the stdout protocol.
+fn handle_sidecar_stdout(app: &AppHandle, line: &str) {
+    match serde_json::from_str::<serde_json::Value>(line) {
+        Ok(json) => {
+            if let Some(port_val) = json.get("port").and_then(|v| v.as_u64()) {
+                let port = port_val as u16;
+                info!(target: "sidecar-lifecycle", port, "Sidecar port announcement received");
+                {
+                    let port_state = app.state::<SidecarPort>();
+                    let mut guard = port_state.0.lock().unwrap();
+                    *guard = Some(port);
+                }
+                // Notify the UI that the sidecar is ready on this port so it
+                // doesn't poll prematurely (Tech Notes FR / Fix 2).
+                app.emit("sidecar-ready", port).ok();
+            } else {
+                warn!(
+                    target: "sidecar-lifecycle",
+                    line = %line,
+                    "Sidecar stdout JSON missing 'port' field"
+                );
+            }
+        }
+        Err(e) => {
+            warn!(
+                target: "sidecar-lifecycle",
+                line = %line,
+                error = %e,
+                "Unexpected non-JSON line on sidecar stdout"
+            );
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Clean shutdown
+// ---------------------------------------------------------------------------
+
+/// Kills the sidecar child process. Called on window close and app exit.
+/// Belt-and-suspenders: both RunEvent::WindowEvent::CloseRequested and
+/// RunEvent::Exit call this — the second call is a no-op because the handle
+/// is taken (set to None) on the first call.
+fn shutdown_sidecar(app: &AppHandle) {
+    let handle_state = app.state::<SidecarHandle>();
+    // Set the flag BEFORE killing so the event-loop task knows this is intentional.
+    handle_state.shutting_down.store(true, Ordering::SeqCst);
+    let mut guard = handle_state.child.lock().unwrap();
+    if let Some(child) = guard.take() {
+        info!(target: "sidecar-lifecycle", "Killing sidecar on app shutdown");
+        if let Err(e) = child.kill() {
+            error!(target: "sidecar-lifecycle", ?e, "Failed to kill sidecar on shutdown");
+        }
+    }
+}
+

@@ -1,41 +1,170 @@
-// ZoePlane — Tauri IPC bridge stubs
+// ZoePlane — Tauri IPC bridge
 //
 // This module declares the Tauri commands that the React UI can invoke via
-// `invoke("command_name", args)`. All commands here are stubs; they will be
-// implemented in Epic 01 (Project Scaffold) and expanded across subsequent epics.
+// `invoke("command_name", args)`.
 //
-// Architecture note: the sidecar (Node.js) handles all Claude API / CLI
+// Architecture note: the sidecar (Node.js/bun) handles all Claude API / CLI
 // subprocess work. The Rust shell forwards IPC messages, manages the subprocess
 // lifecycle, and handles filesystem permissions. The React UI NEVER speaks to
-// the CLI directly — it speaks only to Rust commands, which speak to the sidecar.
+// the sidecar directly — it speaks only to Rust commands, which speak to the
+// sidecar over HTTP loopback.
 
 use serde::{Deserialize, Serialize};
+use tauri::State;
+use tracing::{error, info, warn};
+
+use crate::{HttpClient, SidecarHandle, SidecarPort};
+
+// ---------------------------------------------------------------------------
+// Types
+// ---------------------------------------------------------------------------
+
+/// Sidecar process lifecycle status returned by `sidecar_status`.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SidecarStatus {
+    /// Whether the sidecar HTTP server responded to the health-check within
+    /// the 100 ms SLA window.
+    pub running: bool,
+    /// OS PID of the sidecar process as reported by its `/health` response.
+    pub pid: Option<u32>,
+    /// Reserved for future use — will carry sidecar version string once
+    /// Epic 02 adds richer health data.
+    pub version: Option<String>,
+}
+
+/// Shape of the sidecar's `GET /health` response body.
+#[derive(Debug, Deserialize)]
+struct HealthResponse {
+    #[allow(dead_code)]
+    status: String,
+    pid: u32,
+}
+
+// ---------------------------------------------------------------------------
+// Commands
+// ---------------------------------------------------------------------------
 
 /// Health-check command used by the UI to verify the Tauri bridge is alive.
-/// Returns "pong" unconditionally.
+/// Returns "pong" unconditionally — no sidecar involvement.
 #[tauri::command]
 pub fn ping() -> &'static str {
     "pong"
 }
 
-/// Returns the current lifecycle status of the sidecar process.
-/// Stub — real implementation wires to the sidecar subprocess handle (Epic 01).
+/// Issues an HTTP health-check to the sidecar loopback server with a strict
+/// 100 ms timeout (AC2 + AC5).
+///
+/// Returns `running: true` with the sidecar's reported PID on success.
+/// Returns `running: false` if the port is not yet known (sidecar still
+/// starting), if the request times out (AC5), or if the HTTP call fails.
+///
+/// AC5 note: timeout events are logged to the `sidecar-ipc` tracing target
+/// so they appear in RUST_LOG output and can be correlated to a request.
 #[tauri::command]
-pub fn sidecar_status() -> SidecarStatus {
-    // TODO (Epic 01): check actual subprocess PID / health.
-    SidecarStatus {
-        running: false,
-        pid: None,
-        version: None,
-    }
-}
+pub async fn sidecar_status(
+    port_state: State<'_, SidecarPort>,
+    _handle_state: State<'_, SidecarHandle>,
+    http_client: State<'_, HttpClient>,
+) -> Result<SidecarStatus, String> {
+    // Read the port that was captured from the sidecar's stdout announcement.
+    let port = {
+        let guard = port_state.0.lock().map_err(|e| e.to_string())?;
+        *guard
+    };
 
-/// Sidecar process lifecycle status returned by `sidecar_status`.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct SidecarStatus {
-    pub running: bool,
-    pub pid: Option<u32>,
-    pub version: Option<String>,
+    let Some(port) = port else {
+        // Sidecar has not yet announced its port — still starting up.
+        warn!(target: "sidecar-ipc", "Health-check called before sidecar port is known");
+        return Ok(SidecarStatus {
+            running: false,
+            pid: None,
+            version: None,
+        });
+    };
+
+    let url = format!("http://127.0.0.1:{port}/health");
+    info!(target: "sidecar-ipc", %url, "Issuing sidecar health-check");
+
+    // Use the shared reqwest::Client from Tauri state (connection pool reuse).
+    // The client has a 100 ms default timeout set at construction time (IPC SLA AC2 + AC5).
+    let result = http_client
+        .0
+        .get(&url)
+        .send()
+        .await;
+
+    match result {
+        Ok(resp) if resp.status().is_success() => {
+            match resp.json::<HealthResponse>().await {
+                Ok(health) => {
+                    info!(
+                        target: "sidecar-ipc",
+                        pid = health.pid,
+                        "Sidecar health-check OK"
+                    );
+                    Ok(SidecarStatus {
+                        running: true,
+                        pid: Some(health.pid),
+                        version: None,
+                    })
+                }
+                Err(e) => {
+                    error!(
+                        target: "sidecar-ipc",
+                        error = %e,
+                        "Sidecar health-check: failed to parse response body"
+                    );
+                    Ok(SidecarStatus {
+                        running: false,
+                        pid: None,
+                        version: None,
+                    })
+                }
+            }
+        }
+        Ok(resp) => {
+            // HTTP error status (e.g., 500 from sidecar crash handler).
+            error!(
+                target: "sidecar-ipc",
+                status = %resp.status(),
+                %url,
+                "Sidecar health-check returned non-success status"
+            );
+            Ok(SidecarStatus {
+                running: false,
+                pid: None,
+                version: None,
+            })
+        }
+        Err(e) if e.is_timeout() => {
+            // AC5: log the timeout event with enough context to identify the request.
+            error!(
+                target: "sidecar-ipc",
+                %url,
+                timeout_ms = 100,
+                "Sidecar health-check IPC timeout — sidecar did not respond within 100 ms"
+            );
+            Ok(SidecarStatus {
+                running: false,
+                pid: None,
+                version: None,
+            })
+        }
+        Err(e) => {
+            // Connection refused, OS error, etc. — sidecar likely crashed.
+            error!(
+                target: "sidecar-ipc",
+                error = %e,
+                %url,
+                "Sidecar health-check request failed"
+            );
+            Ok(SidecarStatus {
+                running: false,
+                pid: None,
+                version: None,
+            })
+        }
+    }
 }
 
 // TODO (Epic 03): add `read_dir_recursive`, `watch_path`, `stop_watch` commands.
