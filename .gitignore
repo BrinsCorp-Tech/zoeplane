@@ -59,8 +59,10 @@ storybook-static/
 coverage/
 .nyc_output/
 
-# ---- Bun lockfile — commit bun.lockb, not this ----
-# bun.lockb is committed; exclude older lock formats
+# ---- Lockfile hygiene ----
+# bun.lock (text format, bun >= 1.2) is the committed lockfile — do not ignore it.
+# Older binary bun.lockb is not produced by current Bun versions.
+# Exclude competing lock formats so only bun.lock lands in the repo.
 package-lock.json
 pnpm-lock.yaml
 yarn.lock
@@ -72,7 +74,9 @@ docs/architecture/
 docs/design/
 docs/discovery/
 docs/epics/
+docs/features/
 docs/handoffs/
+docs/stories/
 
 # ---- Local working files (not for OSS public repo) ----
 whats-next.md

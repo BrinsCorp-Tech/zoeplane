@@ -13,7 +13,7 @@
   "scripts": {
     "dev": "bun run --cwd src dev",
     "build": "bun run --cwd packages/design-tokens build && bun run --cwd src build && bun run --cwd sidecar build",
-    "tauri": "cargo tauri dev",
+    "tauri": "cargo tauri",
     "tauri:build": "cargo tauri build",
     "lint": "eslint 'src/**/*.{ts,tsx}' 'sidecar/src/**/*.ts' 'packages/*/src/**/*.ts'",
     "typecheck": "bun run --cwd src typecheck && bun run --cwd sidecar typecheck && bun run --cwd packages/shared-types typecheck && bun run --cwd packages/plugin-sdk typecheck",
@@ -23,6 +23,9 @@
     "tokens:check": "bun run --cwd packages/design-tokens check-tokens"
   },
   "devDependencies": {
+    "@tanstack/react-query-devtools": "^5.0.0",
+    "@types/react": "^18.3.0",
+    "@types/react-dom": "^18.3.0",
     "@vitejs/plugin-react": "^4.3.0",
     "autoprefixer": "^10.4.0",
     "eslint": "^9.0.0",
@@ -45,7 +48,8 @@
     "react": "^18.3.0",
     "react-dom": "^18.3.0",
     "tailwind-merge": "^2.4.0",
-    "zustand": "^5.0.0"
+    "zustand": "^5.0.0",
+    "@tanstack/react-query": "^5.0.0"
   },
   "engines": {
     "bun": ">=1.1.0",

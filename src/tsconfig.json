@@ -2,6 +2,7 @@
   "compilerOptions": {
     "target": "ES2022",
     "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    "types": ["vite/client"],
     "module": "ESNext",
     "moduleResolution": "Bundler",
     "jsx": "react-jsx",
@@ -15,16 +16,14 @@
     "noEmit": true,
     "skipLibCheck": true,
     "paths": {
-      "@/*": ["./*"]
+      "@/*": ["./*"],
+      "@host/*": ["../src-tauri/*"],
+      "@sdk/*": ["../packages/plugin-sdk/src/*"]
     }
   },
   "include": [
     ".",
     "../packages/shared-types/src",
     "../packages/plugin-sdk/src"
-  ],
-  "references": [
-    { "path": "../packages/shared-types" },
-    { "path": "../packages/plugin-sdk" }
   ]
 }
