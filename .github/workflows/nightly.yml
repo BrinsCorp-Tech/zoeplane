@@ -111,6 +111,13 @@ jobs:
       fail-fast: false
       matrix:
         os: [macos-latest, windows-latest, ubuntu-22.04]
+        include:
+          - os: macos-latest
+            bundles: app
+          - os: windows-latest
+            bundles: msi,nsis
+          - os: ubuntu-22.04
+            bundles: deb,rpm
 
     steps:
       - name: Checkout main
@@ -151,7 +158,12 @@ jobs:
         run: bun run --cwd sidecar build
 
       - name: Tauri build (unsigned)
+        # --bundles overrides tauri.conf.json bundle.targets for this invocation only,
+        # excluding dmg (macOS) and appimage (Linux) which are flaky on GHA runners.
+        # Signed release.yml reads bundle.targets in full and produces all 7 formats.
         uses: tauri-apps/tauri-action@v0
+        with:
+          args: --bundles ${{ matrix.bundles }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 

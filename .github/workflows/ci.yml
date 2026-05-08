@@ -153,6 +153,13 @@ jobs:
       fail-fast: false
       matrix:
         os: [macos-latest, windows-latest, ubuntu-22.04]
+        include:
+          - os: macos-latest
+            bundles: app
+          - os: windows-latest
+            bundles: msi,nsis
+          - os: ubuntu-22.04
+            bundles: deb,rpm
 
     steps:
       - name: Checkout
@@ -194,7 +201,12 @@ jobs:
 
       - name: Tauri build (unsigned)
         # Unsigned builds only — signed releases are handled by release.yml (Story 1.5).
+        # --bundles overrides tauri.conf.json bundle.targets for this invocation only,
+        # excluding dmg (macOS) and appimage (Linux) which are flaky on GHA runners.
+        # Signed release.yml reads bundle.targets in full and produces all 7 formats.
         uses: tauri-apps/tauri-action@v0
+        with:
+          args: --bundles ${{ matrix.bundles }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
