@@ -99,6 +99,47 @@ jobs:
           bun run --cwd packages/design-tokens check-tokens || echo "TODO: token-completeness check not yet implemented — add in Sprint 1"
 
   # ──────────────────────────────────────────────────────────────────────────────
+  # scaffold-health: fast pre-flight checks that are platform-invariant.
+  # Runs on ubuntu only (these checks have no platform-specific logic).
+  # Failures here mean the repo is in a broken state before Rust even compiles.
+  # ──────────────────────────────────────────────────────────────────────────────
+  scaffold-health:
+    name: Scaffold Health
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Verify Tauri icons present
+        run: |
+          missing=0
+          for f in 32x32.png 128x128.png 128x128@2x.png icon.icns icon.ico; do
+            if [ ! -f "src-tauri/icons/$f" ]; then
+              echo "::error file=src-tauri/icons/$f::missing icon (declared in tauri.conf.json bundle.icon)"
+              missing=1
+            fi
+          done
+          exit $missing
+      - name: Verify icon master present
+        run: test -f src-tauri/icons/icon-master.png || { echo "::error::icon-master.png missing — required for icon regeneration"; exit 1; }
+      - name: Verify sidecar entry exists
+        run: test -f sidecar/src/index.ts
+      - name: Verify migrations directory non-empty
+        run: ls sidecar/src/db/migrations/*.sql > /dev/null
+
+  # ──────────────────────────────────────────────────────────────────────────────
+  # actionlint: lint GitHub Actions workflow YAML for correctness.
+  # Standalone job — no matrix needed; platform-invariant.
+  # ──────────────────────────────────────────────────────────────────────────────
+  actionlint:
+    name: Workflow Lint (actionlint)
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: reviewdog/action-actionlint@v1
+        with:
+          reporter: github-pr-check
+          fail_level: error
+
+  # ──────────────────────────────────────────────────────────────────────────────
   # build: unsigned Tauri platform builds
   # A failure here indicates a platform-specific compilation issue, not a code
   # quality failure.  Step names are explicit to distinguish infra failures from
@@ -106,6 +147,7 @@ jobs:
   # ──────────────────────────────────────────────────────────────────────────────
   build:
     name: Build (${{ matrix.os }})
+    needs: [lint, typecheck, test, scaffold-health]
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
@@ -164,3 +206,28 @@ jobs:
           path: src-tauri/target/release/bundle/
           if-no-files-found: ignore
           retention-days: 7
+
+  # ──────────────────────────────────────────────────────────────────────────────
+  # summary: publish a results table to the GitHub Actions step summary.
+  # Runs after all jobs regardless of outcome (if: always()).
+  # ──────────────────────────────────────────────────────────────────────────────
+  summary:
+    name: Summary
+    runs-on: ubuntu-22.04
+    needs: [lint, typecheck, test, scaffold-health, actionlint, build]
+    if: always()
+    steps:
+      - name: Publish results table
+        run: |
+          {
+            echo "# CI Matrix Results"
+            echo ""
+            echo "| Job | Status |"
+            echo "|-----|--------|"
+            echo "| Lint | ${{ needs.lint.result }} |"
+            echo "| Typecheck | ${{ needs.typecheck.result }} |"
+            echo "| Unit Tests | ${{ needs.test.result }} |"
+            echo "| Scaffold Health | ${{ needs.scaffold-health.result }} |"
+            echo "| Workflow Lint (actionlint) | ${{ needs.actionlint.result }} |"
+            echo "| Build | ${{ needs.build.result }} |"
+          } >> "$GITHUB_STEP_SUMMARY"

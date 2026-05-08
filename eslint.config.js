@@ -26,7 +26,9 @@ export default tseslint.config(
       "**/vite.config.js",      // vite — build tooling, not app source
       "**/postcss.config.js",   // postcss — build tooling
       "**/tailwind.config.js",  // tailwind — build tooling
-      "**/*.config.ts", // tailwind.config.ts lives in src/ but is build tooling
+      "**/tailwind.config.ts",  // tailwind — build tooling (TS variant)
+      "**/vite.config.ts",      // vite — build tooling (TS variant)
+      "**/vitest.config.ts",    // vitest — test harness config, not app source
     ],
   },
 
