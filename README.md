@@ -45,7 +45,7 @@ Apache 2.0. Built by [BrinsCorp-Tech](https://github.com/BrinsCorp-Tech).
 - **Tauri CLI** (`cargo install tauri-cli --version "^2"`)
 - **Node.js** ≥ 20 (fallback if bun is unavailable for some tooling)
 - macOS: Xcode Command Line Tools (`xcode-select --install`)
-- Linux: see `.github/workflows/build.yml` for `apt` dependencies
+- Linux: see `.github/workflows/ci.yml` for `apt` dependencies
 
 ### First-time setup
 

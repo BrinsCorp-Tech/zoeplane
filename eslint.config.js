@@ -1,0 +1,64 @@
+// ZoePlane — ESLint 9 flat configuration
+// Covers: src/ (React UI), sidecar/src/ (Bun sidecar), packages/*/src/ (shared packages)
+//
+// Intentionally minimal: @eslint/js recommended + typescript-eslint recommended.
+// Type-aware rules (requiresTypeChecking) are NOT enabled here because they
+// require per-workspace tsconfig wiring that adds CI complexity — enforce type
+// safety via `bun run typecheck` (tsc --noEmit) instead.
+//
+// Custom ZoePlane rules (no-component-theme-branch, no-primitive-token) are
+// deferred to Epic 04 Sprint 7 when tools/eslint-plugin-zoeplane/ is implemented.
+
+import js from "@eslint/js";
+import tseslint from "typescript-eslint";
+
+export default tseslint.config(
+  // ----------------------------------------------------------------
+  // Global ignores — applied before any language-specific rules.
+  // ----------------------------------------------------------------
+  {
+    ignores: [
+      "**/node_modules/**",
+      "**/dist/**",
+      "src-tauri/target/**",
+      ".bun-cache/**",
+      "**/*.cjs",     // legacy .eslintrc.cjs — do not self-lint
+      "**/vite.config.js",      // vite — build tooling, not app source
+      "**/postcss.config.js",   // postcss — build tooling
+      "**/tailwind.config.js",  // tailwind — build tooling
+      "**/*.config.ts", // tailwind.config.ts lives in src/ but is build tooling
+    ],
+  },
+
+  // ----------------------------------------------------------------
+  // Base JS recommended rules for all matched files.
+  // ----------------------------------------------------------------
+  js.configs.recommended,
+
+  // ----------------------------------------------------------------
+  // TypeScript recommended ruleset — no type-checking overlay.
+  // ----------------------------------------------------------------
+  ...tseslint.configs.recommended,
+
+  // ----------------------------------------------------------------
+  // File targeting: TypeScript sources across all three workspaces.
+  // ----------------------------------------------------------------
+  {
+    files: [
+      "src/**/*.{ts,tsx}",
+      "sidecar/src/**/*.ts",
+      "packages/*/src/**/*.ts",
+    ],
+    rules: {
+      // Relax @typescript-eslint/no-explicit-any for Sprint 1 scaffolding.
+      // TODO (Story 1.x): tighten to "error" once the codebase stabilises.
+      "@typescript-eslint/no-explicit-any": "warn",
+
+      // Allow unused vars prefixed with _ (common TypeScript convention).
+      "@typescript-eslint/no-unused-vars": [
+        "error",
+        { argsIgnorePattern: "^_", varsIgnorePattern: "^_" },
+      ],
+    },
+  }
+);

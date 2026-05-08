@@ -1,17 +1,15 @@
-name: CI
+name: Nightly
 
-# Runs on every pull request into main or develop.  All four job types (lint,
-# typecheck, test, build) run across all three target platforms in parallel.
-# fail-fast: false ensures a failure on one platform does not cancel the others —
-# operators need to see which platforms are red.
-#
-# Branch protection on main should require all matrix legs as required status checks.
-# This is a repo-settings action, not a workflow change.  See PR description for the
-# exact check names to register.
+# Runs daily at 07:00 UTC against main.
+# Also dispatchable manually for ad-hoc verification.
+# Executes the same lint/typecheck/test/build matrix as ci.yml.
+# Artifact summaries are uploaded so failures are easy to triage from the
+# workflow run page without downloading the full run log.
 
 on:
-  pull_request:
-    branches: [main, develop]
+  schedule:
+    - cron: "0 7 * * *"
+  workflow_dispatch:
 
 jobs:
   # ──────────────────────────────────────────────────────────────────────────────
@@ -26,8 +24,10 @@ jobs:
         os: [macos-latest, windows-latest, ubuntu-22.04]
 
     steps:
-      - name: Checkout
+      - name: Checkout main
         uses: actions/checkout@v4
+        with:
+          ref: main
 
       - name: Setup Bun
         uses: oven-sh/setup-bun@v1
@@ -52,8 +52,10 @@ jobs:
         os: [macos-latest, windows-latest, ubuntu-22.04]
 
     steps:
-      - name: Checkout
+      - name: Checkout main
         uses: actions/checkout@v4
+        with:
+          ref: main
 
       - name: Setup Bun
         uses: oven-sh/setup-bun@v1
@@ -78,8 +80,10 @@ jobs:
         os: [macos-latest, windows-latest, ubuntu-22.04]
 
     steps:
-      - name: Checkout
+      - name: Checkout main
         uses: actions/checkout@v4
+        with:
+          ref: main
 
       - name: Setup Bun
         uses: oven-sh/setup-bun@v1
@@ -93,16 +97,12 @@ jobs:
         run: bun run test
 
       - name: Check tokens completeness
-        # Every semantic token in :root[data-theme="light"] must also exist in
-        # :root[data-theme="dark"].  The script lives in packages/design-tokens.
         run: |
-          bun run --cwd packages/design-tokens check-tokens || echo "TODO: token-completeness check not yet implemented — add in Sprint 1"
+          bun run --cwd packages/design-tokens check-tokens || echo "TODO: token-completeness check not yet implemented"
 
   # ──────────────────────────────────────────────────────────────────────────────
   # build: unsigned Tauri platform builds
-  # A failure here indicates a platform-specific compilation issue, not a code
-  # quality failure.  Step names are explicit to distinguish infra failures from
-  # code-level failures in the run log.
+  # Artifacts uploaded for every leg so nightly regressions are easy to triage.
   # ──────────────────────────────────────────────────────────────────────────────
   build:
     name: Build (${{ matrix.os }})
@@ -113,8 +113,10 @@ jobs:
         os: [macos-latest, windows-latest, ubuntu-22.04]
 
     steps:
-      - name: Checkout
+      - name: Checkout main
         uses: actions/checkout@v4
+        with:
+          ref: main
 
       - name: Setup Bun
         uses: oven-sh/setup-bun@v1
@@ -146,21 +148,44 @@ jobs:
         run: bun run --cwd src build
 
       - name: Build sidecar (bun single-binary)
-        # Produces sidecar/dist/zoeplane-sidecar — bundled for the target platform.
-        # The binary is embedded by Tauri via the `externalBin` config in tauri.conf.json.
         run: bun run --cwd sidecar build
 
       - name: Tauri build (unsigned)
-        # Unsigned builds only — signed releases are handled by release.yml (Story 1.5).
         uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Upload Tauri artifacts
+        # Upload on success AND failure so infra failures still produce artifacts
+        # (or a clear absence of them) distinguishable from build failures.
         uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: tauri-artifacts-${{ matrix.os }}
+          name: nightly-artifacts-${{ matrix.os }}
           path: src-tauri/target/release/bundle/
           if-no-files-found: ignore
-          retention-days: 7
+          retention-days: 14
+
+  # ──────────────────────────────────────────────────────────────────────────────
+  # summary: collect job statuses and write a run-level summary
+  # Runs after all build legs complete (or fail) and is always executed.
+  # ──────────────────────────────────────────────────────────────────────────────
+  summary:
+    name: Nightly Summary
+    runs-on: ubuntu-22.04
+    needs: [lint, typecheck, test, build]
+    if: always()
+
+    steps:
+      - name: Write run summary
+        run: |
+          echo "## Nightly Build Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Job | Status |" >> $GITHUB_STEP_SUMMARY
+          echo "|-----|--------|" >> $GITHUB_STEP_SUMMARY
+          echo "| lint | ${{ needs.lint.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| typecheck | ${{ needs.typecheck.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| test | ${{ needs.test.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| build | ${{ needs.build.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "Artifacts retained for 14 days. See individual job logs for details." >> $GITHUB_STEP_SUMMARY

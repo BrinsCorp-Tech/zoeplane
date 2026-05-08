@@ -1,8 +1,14 @@
-name: Build
+name: Build (manual)
+
+# DEPRECATED trigger: push to main removed — the build matrix is now covered by
+# the `build` job in ci.yml (runs on every PR and push to main/develop).
+#
+# This file is retained as workflow_dispatch-only for ad-hoc manual builds
+# using the dual-arch macOS pattern (aarch64 + x86_64 as separate legs).
+# It will be absorbed into release.yml when Story 1.5 lands the signed release
+# pipeline.  Do not add push/pull_request triggers here.
 
 on:
-  push:
-    branches: [main]
   workflow_dispatch:
 
 jobs:
