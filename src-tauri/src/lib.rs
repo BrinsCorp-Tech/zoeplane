@@ -110,7 +110,40 @@ pub fn run() {
 
 /// Spawns the sidecar binary using tauri-plugin-shell, wires stdout/stderr
 /// event handlers, and stores the child handle in app state.
+///
+/// The Tauri shell resolves `app_data_dir()` here in Rust and passes the
+/// database file path to the sidecar via `--db-path <path>`.  This keeps
+/// the sidecar platform-agnostic: it never derives the path itself, so
+/// there is no risk of drift with Tauri's identifier-based resolver.
 fn spawn_sidecar(app: &AppHandle) -> Result<(), Box<dyn std::error::Error>> {
+    // Resolve the platform-appropriate application data directory using
+    // Tauri's path API.  The identifier (com.brinscorp.zoeplane) is read from
+    // tauri.conf.json, so this always matches the FS allowlist scope.
+    let app_data_dir = app.path().app_data_dir().map_err(|e| {
+        error!(?e, "Failed to resolve app_data_dir");
+        e
+    })?;
+
+    // Construct the absolute database path: <appDataDir>/zoeplane.db
+    let db_path = app_data_dir.join("zoeplane.db");
+    let db_path_str = db_path.to_string_lossy().into_owned();
+
+    // Resolve the migrations directory from the app's resource bundle.
+    // tauri.conf.json bundles `sidecar/src/db/migrations/**` into the resource dir.
+    let resource_dir = app.path().resource_dir().map_err(|e| {
+        error!(?e, "Failed to resolve resource_dir");
+        e
+    })?;
+    let migrations_dir = resource_dir.join("migrations");
+    let migrations_dir_str = migrations_dir.to_string_lossy().into_owned();
+
+    info!(
+        target: "sidecar-lifecycle",
+        db_path = %db_path_str,
+        migrations_dir = %migrations_dir_str,
+        "Passing DB path and migrations dir to sidecar"
+    );
+
     let (mut rx, child) = app
         .shell()
         .sidecar("zoeplane-sidecar")
@@ -118,6 +151,7 @@ fn spawn_sidecar(app: &AppHandle) -> Result<(), Box<dyn std::error::Error>> {
             error!(?e, "Failed to create sidecar command");
             e
         })?
+        .args(["--db-path", &db_path_str, "--migrations-dir", &migrations_dir_str])
         .spawn()
         .map_err(|e| {
             error!(?e, "Failed to spawn sidecar process");

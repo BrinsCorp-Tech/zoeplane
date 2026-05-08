@@ -42,7 +42,10 @@
     ],
     "externalBin": [
       "binaries/zoeplane-sidecar"
-    ]
+    ],
+    "resources": {
+      "../sidecar/src/db/migrations": "migrations"
+    }
   },
   "plugins": {
     "shell": {
@@ -71,7 +74,7 @@
       "scope": {
         "allow": [
           "$HOME/.claude/**",
-          "$APPDATA/zoeplane/**",
+          "$APPDATA/com.brinscorp.zoeplane/**",
           "$APP/**"
         ],
         "deny": []
