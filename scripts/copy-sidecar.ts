@@ -36,7 +36,9 @@ const __dirname = dirname(__filename);
 // Resolve paths relative to the repo root (this script lives in <root>/scripts/).
 const repoRoot = resolve(__dirname, "..");
 
-const srcBinary = join(repoRoot, "sidecar", "dist", "zoeplane-sidecar");
+// On Windows, bun build --compile appends .exe to the output binary name.
+const binaryExt = process.platform === "win32" ? ".exe" : "";
+const srcBinary = join(repoRoot, "sidecar", "dist", `zoeplane-sidecar${binaryExt}`);
 const binariesDir = join(repoRoot, "src-tauri", "binaries");
 
 // ---------------------------------------------------------------------------
@@ -108,7 +110,8 @@ if (!triple) {
 // ---------------------------------------------------------------------------
 // 3. Copy binary to src-tauri/binaries/zoeplane-sidecar-<triple>.
 // ---------------------------------------------------------------------------
-const destBinary = join(binariesDir, `zoeplane-sidecar-${triple}`);
+// Tauri's externalBin resolver expects: zoeplane-sidecar-<triple>[.exe on Windows]
+const destBinary = join(binariesDir, `zoeplane-sidecar-${triple}${binaryExt}`);
 
 mkdirSync(binariesDir, { recursive: true });
 copyFileSync(srcBinary, destBinary);

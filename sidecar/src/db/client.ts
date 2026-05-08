@@ -37,7 +37,8 @@ export function openDatabase(dbPath: string): Database {
     mkdirSync(dir, { recursive: true });
   } catch (err) {
     throw new Error(
-      `[db/client] Failed to create database directory "${dir}": ${String(err)}`
+      `[db/client] Failed to create database directory "${dir}": ${String(err)}`,
+      { cause: err }
     );
   }
 
@@ -48,7 +49,8 @@ export function openDatabase(dbPath: string): Database {
     db = new Database(dbPath, { create: true });
   } catch (err) {
     throw new Error(
-      `[db/client] Failed to open SQLite database at "${dbPath}": ${String(err)}`
+      `[db/client] Failed to open SQLite database at "${dbPath}": ${String(err)}`,
+      { cause: err }
     );
   }
 

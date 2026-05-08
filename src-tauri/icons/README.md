@@ -1,33 +1,28 @@
-# ZoePlane App Icons
+# ZoePlane Tauri Icons
 
-This directory must contain the following icon files before the first production build.
-Tauri requires specific sizes and formats per platform.
+## Required files (do not delete)
 
-## Required files
+- `icon-master.png` — 1024x1024 PNG source. ZoePlane brand master (geometric Z made of layered planes, deep blue-violet palette). Regenerate all variants if you replace it.
+- `32x32.png`, `128x128.png`, `128x128@2x.png` — required PNG variants referenced in `tauri.conf.json` `bundle.icon[]`.
+- `icon.icns` — required macOS icon container.
+- `icon.ico` — required Windows icon container.
+- `icon.png`, `64x64.png` — additional PNG sizes (kept for reference).
 
-| File | Size | Format | Platform |
-|------|------|--------|----------|
-| `32x32.png` | 32×32 | PNG | Linux (window manager) |
-| `128x128.png` | 128×128 | PNG | Linux (app launcher), Windows |
-| `128x128@2x.png` | 256×256 | PNG | macOS Retina |
-| `icon.icns` | Multi-size ICNS bundle | ICNS | macOS |
-| `icon.ico` | Multi-size ICO bundle | ICO | Windows |
+## How to regenerate
 
-## How to generate
+If you replace `icon-master.png` (e.g., when finalized brand art lands), run from the repo root:
 
-1. Start with a 1024×1024 master SVG or PNG at `icon-master.svg`.
-2. Run `cargo tauri icon icon-master.svg` (requires `cargo-tauri` CLI).
-   This auto-generates all required formats from the master.
-3. Commit the generated files (do NOT commit the master unless it's the canonical design asset).
+```
+bunx @tauri-apps/cli@2 icon src-tauri/icons/icon-master.png --output src-tauri/icons
+```
 
-## Design brief
+Then **manually delete** the `android/`, `ios/`, `Square*Logo.png`, and `StoreLogo.png` outputs that the CLI emits — those are mobile/UWP variants not used by ZoePlane's desktop-only build.
 
-- ZoePlane brand identity: see `docs/design/ux-spec.md` §2.1 for font/color decisions.
-- Primary brand color: `--accent-600` (oklch(0.560 0.200 260) in light; `--accent-400` dark).
-- Icon should work on both light and dark OS backgrounds (macOS dark mode, Windows dark mode).
-- Keep it simple — a single recognizable glyph at 32×32 is the bar.
+## Why this matters
 
-## Status
+Tauri 2.x **requires** all 5 referenced icon files to be present at build time:
 
-TODO: icon design not started. Blocking for first App Store submission (v1.x deferred).
-Non-blocking for development builds — Tauri uses a placeholder if files are absent.
+- **macOS / Linux**: `tauri::generate_context!()` proc macro reads each PNG path declared in `tauri.conf.json` `bundle.icon[]`. Missing files panic at codegen.
+- **Windows**: `tauri-build`'s `build.rs` requires `icon.ico` to generate the Win32 resource (compiled into the .exe via `tauri-winres`). Missing `icon.ico` fails earlier than the codegen step.
+
+There is **no** placeholder fallback — the schema is strict. The repo's `scaffold-health` CI job enforces icon presence so the failure surfaces in seconds rather than 3+ minutes into a Rust compile.
