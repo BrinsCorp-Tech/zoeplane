@@ -108,6 +108,31 @@ ZoePlane/
 
 ---
 
+## Releasing signed builds
+
+Pushing a `v*` tag triggers `release.yml`, which produces signed, notarized artifacts for macOS, Windows, and Linux. The workflow fails loudly if any required secret is absent — unsigned artifacts are never published.
+
+Before the first signed release, a repository operator must provision the following GitHub Actions secrets:
+
+| Secret | Platform | Description |
+|--------|----------|-------------|
+| `APPLE_CERTIFICATE` | macOS | Base64-encoded `.p12` Developer ID certificate |
+| `APPLE_CERTIFICATE_PASSWORD` | macOS | Password for the `.p12` |
+| `APPLE_SIGNING_IDENTITY` | macOS | Developer ID string (e.g. `Developer ID Application: ...`) |
+| `APPLE_ID` | macOS | Apple ID email used for notarization |
+| `APPLE_PASSWORD` | macOS | App-specific password for the Apple ID |
+| `APPLE_TEAM_ID` | macOS | Apple Developer Team ID |
+| `WINDOWS_CERTIFICATE` | Windows | Base64-encoded `.pfx` Authenticode certificate |
+| `WINDOWS_CERTIFICATE_PASSWORD` | Windows | Password for the `.pfx` |
+| `LINUX_GPG_PRIVATE_KEY` | Linux | Armored GPG private key for package signing |
+| `LINUX_GPG_PASSPHRASE` | Linux | Passphrase for the GPG key |
+
+Certificate procurement notes: Apple Developer ID requires Apple Developer Program enrollment. Windows Authenticode EV certs (DigiCert, Sectigo) can take 1-2 weeks to issue — start early. Linux GPG key can be self-generated.
+
+Cert material must never be committed to the repo (Apache 2.0 OSS constraint).
+
+---
+
 ## Contributing
 
 See `CLAUDE.md` for Claude Code conventions used by this project.
