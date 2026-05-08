@@ -179,13 +179,15 @@ jobs:
     steps:
       - name: Write run summary
         run: |
-          echo "## Nightly Build Summary" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "| Job | Status |" >> $GITHUB_STEP_SUMMARY
-          echo "|-----|--------|" >> $GITHUB_STEP_SUMMARY
-          echo "| lint | ${{ needs.lint.result }} |" >> $GITHUB_STEP_SUMMARY
-          echo "| typecheck | ${{ needs.typecheck.result }} |" >> $GITHUB_STEP_SUMMARY
-          echo "| test | ${{ needs.test.result }} |" >> $GITHUB_STEP_SUMMARY
-          echo "| build | ${{ needs.build.result }} |" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "Artifacts retained for 14 days. See individual job logs for details." >> $GITHUB_STEP_SUMMARY
+          {
+            echo "## Nightly Build Summary"
+            echo ""
+            echo "| Job | Status |"
+            echo "|-----|--------|"
+            echo "| lint | ${{ needs.lint.result }} |"
+            echo "| typecheck | ${{ needs.typecheck.result }} |"
+            echo "| test | ${{ needs.test.result }} |"
+            echo "| build | ${{ needs.build.result }} |"
+            echo ""
+            echo "Artifacts retained for 14 days. See individual job logs for details."
+          } >> "$GITHUB_STEP_SUMMARY"
