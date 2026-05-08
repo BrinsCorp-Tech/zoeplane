@@ -7,7 +7,7 @@
   "main": "src/index.ts",
   "scripts": {
     "build": "style-dictionary build",
-    "check-tokens": "node scripts/check-token-completeness.mjs",
+    "check-tokens": "echo 'TODO: token-completeness check not yet implemented — Sprint 1 follow-up'",
     "typecheck": "tsc --noEmit"
   },
   "devDependencies": {

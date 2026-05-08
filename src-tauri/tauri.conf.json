@@ -22,8 +22,7 @@
         "fullscreen": false,
         "center": true,
         "decorations": true,
-        "transparent": false,
-        "theme": "System"
+        "transparent": false
       }
     ],
     "security": {
