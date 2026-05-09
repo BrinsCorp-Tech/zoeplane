@@ -77,8 +77,16 @@ yarn.lock
 
 # ---- Private strategic docs (not for OSS public repo) ----
 # Strategic planning, requirements, design specs, and internal handoffs
-# stay local. The OSS repo ships code + LICENSE + README + CLAUDE.md only.
-docs/architecture/
+# stay local. The OSS repo ships code + LICENSE + README + CONTRIBUTING +
+# the public docs/ founding documents (ARCHITECTURE.md, INSTALL.md,
+# SECURITY.md, etc.) plus accepted ADRs under docs/architecture/decisions/.
+#
+# `docs/architecture/` uses a wildcard exclude + exemption pattern because
+# git refuses to descend into a fully-excluded directory (an `!` re-include
+# cannot rescue files whose parent directory was excluded outright).
+docs/architecture/*
+!docs/architecture/decisions/
+!docs/architecture/decisions/**
 docs/design/
 docs/discovery/
 docs/epics/
