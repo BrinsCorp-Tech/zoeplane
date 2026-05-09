@@ -9,6 +9,7 @@
 // main.rs is a thin wrapper that calls run() — required by Tauri 2's mobile
 // build path which links this crate as a library.
 
+mod commands;
 mod ipc;
 
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -16,6 +17,7 @@ use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use tauri::{AppHandle, Emitter, Manager, RunEvent, WindowEvent};
+use tauri_plugin_deep_link::DeepLinkExt;
 use tauri_plugin_shell::process::CommandEvent;
 use tauri_plugin_shell::ShellExt;
 use tracing::{error, info, warn};
@@ -50,8 +52,7 @@ pub fn run() {
     let subscriber = FmtSubscriber::builder()
         .with_env_filter(EnvFilter::from_default_env())
         .finish();
-    tracing::subscriber::set_global_default(subscriber)
-        .expect("Failed to set tracing subscriber");
+    tracing::subscriber::set_global_default(subscriber).expect("Failed to set tracing subscriber");
 
     info!("ZoePlane starting");
 
@@ -61,6 +62,10 @@ pub fn run() {
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_notification::init())
         .plugin(tauri_plugin_process::init())
+        // Deep-link plugin — registers the `zoeplane://` URL scheme with the
+        // host OS. The URL-received handler logs the URL and returns (no action
+        // dispatch — Epic 10 territory per Feature Brief out-of-scope notes).
+        .plugin(tauri_plugin_deep_link::init())
         // Register shared state containers before setup runs.
         .manage(SidecarPort(Mutex::new(None)))
         .manage(SidecarHandle {
@@ -73,14 +78,60 @@ pub fn run() {
                 .build()
                 .expect("reqwest client init"),
         ))
-        // IPC commands — see ipc.rs for implementations.
+        // IPC commands — see ipc.rs and commands/ for implementations.
         .invoke_handler(tauri::generate_handler![
             ipc::ping,
             ipc::sidecar_status,
+            // FB-016: FS allowlist-violation logger wrappers.
+            // React UI and sidecar MUST call these instead of raw plugin APIs.
+            commands::fs::fs_read_file,
+            commands::fs::fs_write_file,
+            commands::fs::fs_read_dir,
+            commands::fs::fs_exists,
         ])
         .setup(|app| {
             info!("App setup — spawning sidecar");
             spawn_sidecar(app.handle())?;
+
+            // Wire the deep-link URL-received handler (FB-013, FB-014).
+            //
+            // This handler is intentionally a no-op beyond logging: action
+            // dispatch from deep-link URLs belongs to Epic 10 (settings /
+            // credential flows). For Sprint 1, we only satisfy:
+            //   AC1 — scheme registered with host OS (done via tauri.conf.json)
+            //   AC5 (FB-014) — malformed URLs are logged and the app does NOT crash
+            //
+            // Malformed-URL safety: any URL that arrives here passed OS-level
+            // scheme routing, so it has at least a valid scheme. We parse with
+            // the `url` crate (transitively available via tauri) and log.
+            // If parsing fails we still log the raw string — no crash path.
+            app.deep_link().on_open_url(|event| {
+                for url in event.urls() {
+                    // Validate structure — log at WARN for unexpected payloads.
+                    let url_str = url.as_str();
+                    if url.scheme() != "zoeplane" {
+                        warn!(
+                            target: "deep-link",
+                            url = %url_str,
+                            "Received deep-link with unexpected scheme — ignoring"
+                        );
+                    } else if url.host().is_none() && url.path().is_empty() {
+                        // Malformed: zoeplane:// with no host or path (FB-014).
+                        warn!(
+                            target: "deep-link",
+                            url = %url_str,
+                            "Received malformed zoeplane:// deep-link (no host/path)"
+                        );
+                    } else {
+                        info!(
+                            target: "deep-link",
+                            url = %url_str,
+                            "Received zoeplane:// deep-link — no dispatch (Epic 10 deferred)"
+                        );
+                    }
+                }
+            });
+
             Ok(())
         })
         .build(tauri::generate_context!())
@@ -151,7 +202,12 @@ fn spawn_sidecar(app: &AppHandle) -> Result<(), Box<dyn std::error::Error>> {
             error!(?e, "Failed to create sidecar command");
             e
         })?
-        .args(["--db-path", &db_path_str, "--migrations-dir", &migrations_dir_str])
+        .args([
+            "--db-path",
+            &db_path_str,
+            "--migrations-dir",
+            &migrations_dir_str,
+        ])
         .spawn()
         .map_err(|e| {
             error!(?e, "Failed to spawn sidecar process");
@@ -292,4 +348,3 @@ fn shutdown_sidecar(app: &AppHandle) {
         }
     }
 }
-

@@ -87,41 +87,35 @@ pub async fn sidecar_status(
 
     // Use the shared reqwest::Client from Tauri state (connection pool reuse).
     // The client has a 100 ms default timeout set at construction time (IPC SLA AC2 + AC5).
-    let result = http_client
-        .0
-        .get(&url)
-        .send()
-        .await;
+    let result = http_client.0.get(&url).send().await;
 
     match result {
-        Ok(resp) if resp.status().is_success() => {
-            match resp.json::<HealthResponse>().await {
-                Ok(health) => {
-                    info!(
-                        target: "sidecar-ipc",
-                        pid = health.pid,
-                        "Sidecar health-check OK"
-                    );
-                    Ok(SidecarStatus {
-                        running: true,
-                        pid: Some(health.pid),
-                        version: None,
-                    })
-                }
-                Err(e) => {
-                    error!(
-                        target: "sidecar-ipc",
-                        error = %e,
-                        "Sidecar health-check: failed to parse response body"
-                    );
-                    Ok(SidecarStatus {
-                        running: false,
-                        pid: None,
-                        version: None,
-                    })
-                }
+        Ok(resp) if resp.status().is_success() => match resp.json::<HealthResponse>().await {
+            Ok(health) => {
+                info!(
+                    target: "sidecar-ipc",
+                    pid = health.pid,
+                    "Sidecar health-check OK"
+                );
+                Ok(SidecarStatus {
+                    running: true,
+                    pid: Some(health.pid),
+                    version: None,
+                })
             }
-        }
+            Err(e) => {
+                error!(
+                    target: "sidecar-ipc",
+                    error = %e,
+                    "Sidecar health-check: failed to parse response body"
+                );
+                Ok(SidecarStatus {
+                    running: false,
+                    pid: None,
+                    version: None,
+                })
+            }
+        },
         Ok(resp) => {
             // HTTP error status (e.g., 500 from sidecar crash handler).
             error!(

@@ -45,6 +45,25 @@ export default tseslint.config(
   // ----------------------------------------------------------------
   // File targeting: TypeScript sources across all three workspaces.
   // ----------------------------------------------------------------
+  // ----------------------------------------------------------------
+  // FB-016: Restrict direct @tauri-apps/plugin-fs imports in the UI.
+  // The React UI must use the audited IPC commands (fs_read_file,
+  // fs_write_file, fs_read_dir, fs_exists) defined in
+  // src-tauri/src/commands/fs.rs. Direct plugin imports bypass the
+  // FB-016 audit log entirely.
+  // ----------------------------------------------------------------
+  {
+    files: ["src/**/*.{ts,tsx,js,jsx}"],
+    rules: {
+      "no-restricted-imports": ["error", {
+        paths: [{
+          name: "@tauri-apps/plugin-fs",
+          message: "Direct imports of @tauri-apps/plugin-fs bypass FB-016 audit logging. Use the fs_read_file / fs_write_file / fs_read_dir / fs_exists IPC commands defined in src-tauri/src/commands/fs.rs instead."
+        }]
+      }]
+    }
+  },
+
   {
     files: [
       "src/**/*.{ts,tsx}",

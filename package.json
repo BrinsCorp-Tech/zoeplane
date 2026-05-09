@@ -20,7 +20,8 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "tokens:build": "bun run --cwd packages/design-tokens build",
-    "tokens:check": "bun run --cwd packages/design-tokens check-tokens"
+    "tokens:check": "bun run --cwd packages/design-tokens check-tokens",
+    "prepare": "husky"
   },
   "devDependencies": {
     "@eslint/js": "^9.39.4",
@@ -31,8 +32,11 @@
     "@vitejs/plugin-react": "^4.3.0",
     "autoprefixer": "^10.4.0",
     "eslint": "^9.0.0",
+    "husky": "9.1.7",
     "internal-ip": "^7.0.0",
+    "lint-staged": "17.0.3",
     "prettier": "^3.3.0",
+    "prettier-plugin-tailwindcss": "^0.6.0",
     "tailwindcss": "^4.0.0",
     "typescript": "^5.5.0",
     "typescript-eslint": "8.59.2",
@@ -40,7 +44,9 @@
     "vitest": "^2.0.0"
   },
   "dependencies": {
+    "@tanstack/react-query": "^5.0.0",
     "@tauri-apps/api": "^2.0.0",
+    "@tauri-apps/plugin-deep-link": "2.4.9",
     "@tauri-apps/plugin-dialog": "^2.0.0",
     "@tauri-apps/plugin-fs": "^2.0.0",
     "@tauri-apps/plugin-notification": "^2.0.0",
@@ -50,11 +56,19 @@
     "react": "^18.3.0",
     "react-dom": "^18.3.0",
     "tailwind-merge": "^2.4.0",
-    "zustand": "^5.0.0",
-    "@tanstack/react-query": "^5.0.0"
+    "zustand": "^5.0.0"
   },
   "engines": {
     "bun": ">=1.1.0",
     "node": ">=20.0.0"
+  },
+  "lint-staged": {
+    "*.{ts,tsx}": [
+      "eslint --fix",
+      "prettier --write"
+    ],
+    "*.{json,md,css,html}": [
+      "prettier --write"
+    ]
   }
 }

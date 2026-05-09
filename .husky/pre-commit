@@ -1,0 +1,9 @@
+bunx lint-staged && \
+  if [ -f "$HOME/.cargo/env" ]; then
+    . "$HOME/.cargo/env"
+  fi && \
+  if ! command -v cargo > /dev/null 2>&1; then
+    echo "husky: cargo not found. Install Rust via rustup: https://rustup.rs"
+    exit 1
+  fi && \
+  (cd src-tauri && cargo fmt --check)
