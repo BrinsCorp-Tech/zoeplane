@@ -21,6 +21,7 @@ use std::path::PathBuf;
 
 use serde::{Deserialize, Serialize};
 use tauri::command;
+use tauri_plugin_fs::FsExt;
 use tracing::{error, info};
 
 /// Structured log payload emitted on every FS allowlist violation (FB-016).
@@ -75,16 +76,18 @@ fn log_violation(path: &str, caller: &str, operation: &str) {
 
 /// Determines whether an FS error is an allowlist-scope denial.
 ///
-/// Tauri 2's `tauri-plugin-fs` returns a `tauri_plugin_fs::Error` whose
-/// `to_string()` contains the substring "path not allowed" (or a variant)
-/// when the target path is outside the configured allowlist scope. We match
-/// on this string because the error type is not re-exported for `is()`-style
-/// downcasting from caller code.
+/// In v2.5.1 of `tauri-plugin-fs`, the only `Fs<R>` method that routes through
+/// the plugin's allowlist scope is `read()` (and its sibling `read_to_string()`),
+/// which surface scope denials as `std::io::Error`. The plugin's error message
+/// for the deny case includes the substring "path not allowed". We match on
+/// this string because the underlying error type is `std::io::Error` whose
+/// `kind()` is `PermissionDenied` for many unrelated reasons; the message
+/// substring is the most reliable disambiguator.
+///
+/// For `fs_write_file`, `fs_read_dir`, and `fs_exists`, scope is checked
+/// explicitly via `app.fs_scope().is_allowed()` before any I/O — so this
+/// helper is only consulted by `fs_read_file`.
 fn is_scope_deny(err: &str) -> bool {
-    // Tauri 2 tauri-plugin-fs emits these substrings on scope denial.
-    // "path not allowed" is the canonical v2 message (Error::PathNotAllowed).
-    // "forbidden" and "not in the allowlist" cover historical variants.
-    // Do NOT match "scope" generically — too broad; canonical message above already covers scope denials.
     err.contains("path not allowed")
         || err.contains("forbidden")
         || err.contains("not in the allowlist")
@@ -118,9 +121,11 @@ pub async fn fs_read_file(
         "FS read_file requested"
     );
 
-    // Use the tauri_plugin_fs::FsExt trait to call the underlying FS plugin.
-    use tauri_plugin_fs::FsExt;
-    match app.fs().read(resolved).await {
+    // FsExt::read() in tauri-plugin-fs v2.5.1 is synchronous; it returns
+    // std::io::Result<Vec<u8>>. The plugin's allowlist scope is enforced
+    // inside read() (via the underlying open() routing through scope checks),
+    // so a scope-deny surfaces as an io::Error whose message we can match.
+    match app.fs().read(resolved) {
         Ok(bytes) => {
             info!(
                 target: "fs-allowlist",
@@ -169,8 +174,17 @@ pub async fn fs_write_file(
         "FS write_file requested"
     );
 
-    use tauri_plugin_fs::FsExt;
-    match app.fs().write(resolved, &contents).await {
+    // tauri-plugin-fs v2.5.1 does not expose a write() method on Fs<R>; the
+    // plugin's write IPC handler is JS-only. We replicate FB-016 enforcement
+    // ourselves: explicit allowlist check via fs_scope().is_allowed(), then
+    // std::fs::write for the actual I/O.
+    let scope = app.fs_scope();
+    if !scope.is_allowed(&resolved) {
+        log_violation(&path, &caller, "write_file");
+        return Err("path not allowed".to_string());
+    }
+
+    match std::fs::write(&resolved, &contents) {
         Ok(()) => {
             info!(
                 target: "fs-allowlist",
@@ -182,17 +196,13 @@ pub async fn fs_write_file(
         }
         Err(e) => {
             let msg = e.to_string();
-            if is_scope_deny(&msg) {
-                log_violation(&path, &caller, "write_file");
-            } else {
-                error!(
-                    target: "fs-allowlist",
-                    path = %path,
-                    caller = %caller,
-                    error = %msg,
-                    "FS write_file failed (non-scope error)"
-                );
-            }
+            error!(
+                target: "fs-allowlist",
+                path = %path,
+                caller = %caller,
+                error = %msg,
+                "FS write_file failed (post-scope I/O error)"
+            );
             Err(msg)
         }
     }
@@ -216,13 +226,38 @@ pub async fn fs_read_dir(
         "FS read_dir requested"
     );
 
-    use tauri_plugin_fs::FsExt;
-    match app.fs().read_dir(resolved, Default::default()).await {
+    // tauri-plugin-fs v2.5.1 does not expose a read_dir() method on Fs<R>; the
+    // plugin's read_dir IPC handler is JS-only. Same pattern as fs_write_file:
+    // explicit scope check, then std::fs::read_dir for the listing.
+    let scope = app.fs_scope();
+    if !scope.is_allowed(&resolved) {
+        log_violation(&path, &caller, "read_dir");
+        return Err("path not allowed".to_string());
+    }
+
+    match std::fs::read_dir(&resolved) {
         Ok(entries) => {
-            let names: Vec<String> = entries
-                .into_iter()
-                .map(|e| e.name.unwrap_or_default())
-                .collect();
+            let mut names: Vec<String> = Vec::new();
+            for entry in entries {
+                match entry {
+                    Ok(e) => {
+                        // file_name() returns OsString; lossy conversion preserves
+                        // the entry even when names contain non-UTF-8 bytes.
+                        names.push(e.file_name().to_string_lossy().into_owned());
+                    }
+                    Err(e) => {
+                        // Skip individual entries that fail to read; do not fail
+                        // the whole listing for one bad inode.
+                        error!(
+                            target: "fs-allowlist",
+                            path = %path,
+                            caller = %caller,
+                            error = %e,
+                            "Skipping unreadable directory entry"
+                        );
+                    }
+                }
+            }
             info!(
                 target: "fs-allowlist",
                 path = %path,
@@ -234,17 +269,13 @@ pub async fn fs_read_dir(
         }
         Err(e) => {
             let msg = e.to_string();
-            if is_scope_deny(&msg) {
-                log_violation(&path, &caller, "read_dir");
-            } else {
-                error!(
-                    target: "fs-allowlist",
-                    path = %path,
-                    caller = %caller,
-                    error = %msg,
-                    "FS read_dir failed (non-scope error)"
-                );
-            }
+            error!(
+                target: "fs-allowlist",
+                path = %path,
+                caller = %caller,
+                error = %msg,
+                "FS read_dir failed (post-scope I/O error)"
+            );
             Err(msg)
         }
     }
@@ -267,23 +298,14 @@ pub async fn fs_exists(
         "FS exists requested"
     );
 
-    use tauri_plugin_fs::FsExt;
-    match app.fs().exists(resolved).await {
-        Ok(exists) => Ok(exists),
-        Err(e) => {
-            let msg = e.to_string();
-            if is_scope_deny(&msg) {
-                log_violation(&path, &caller, "exists");
-            } else {
-                error!(
-                    target: "fs-allowlist",
-                    path = %path,
-                    caller = %caller,
-                    error = %msg,
-                    "FS exists check failed (non-scope error)"
-                );
-            }
-            Err(msg)
-        }
+    // tauri-plugin-fs v2.5.1 does not expose an exists() method on Fs<R>; the
+    // plugin's exists IPC handler is JS-only. Pattern as above: explicit scope
+    // check, then std::path::Path::exists() for the lookup.
+    let scope = app.fs_scope();
+    if !scope.is_allowed(&resolved) {
+        log_violation(&path, &caller, "exists");
+        return Err("path not allowed".to_string());
     }
+
+    Ok(resolved.exists())
 }
