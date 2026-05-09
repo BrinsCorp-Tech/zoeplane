@@ -1,0 +1,38 @@
+# Winget default locale manifest — BrinsCorpTech.ZoePlane
+#
+# STATIC STUB — not yet submitted to microsoft/winget-pkgs.
+# Submission is post-Sprint-1.
+#
+# OPERATOR ACTION REQUIRED (at each release):
+#   1. Update PackageVersion to match the release tag (without the "v" prefix).
+#   2. Update ReleaseNotesUrl to point to the correct GitHub Release.
+#   3. Submit via PR to https://github.com/microsoft/winget-pkgs.
+#
+# Schema: https://aka.ms/winget-manifest.defaultLocale.1.9.0.schema.json
+
+PackageIdentifier: BrinsCorpTech.ZoePlane
+PackageVersion: "0.0.0"
+PackageLocale: en-US
+Publisher: BrinsCorp-Tech
+PublisherUrl: "https://github.com/BrinsCorp-Tech"
+PublisherSupportUrl: "https://github.com/BrinsCorp-Tech/zoeplane/issues"
+PackageName: ZoePlane
+PackageUrl: "https://github.com/BrinsCorp-Tech/zoeplane"
+License: Apache-2.0
+LicenseUrl: "https://github.com/BrinsCorp-Tech/zoeplane/blob/main/LICENSE"
+Copyright: "Copyright 2026 BrinsCorp-Tech"
+ShortDescription: "OSS cockpit and plugin host for Claude-Code-native teams"
+Description: >-
+  ZoePlane wraps your existing claude and codex CLIs into a structured,
+  file-native, keyboard-first desktop GUI. It ships a public Plugin SDK so
+  third-party capabilities can extend the cockpit without forking it.
+Moniker: zoeplane
+Tags:
+  - ai
+  - claude
+  - developer-tools
+  - gui
+  - productivity
+ReleaseNotesUrl: "https://github.com/BrinsCorp-Tech/zoeplane/releases/tag/v0.0.0"
+ManifestType: defaultLocale
+ManifestVersion: 1.9.0

@@ -1,20 +1,29 @@
 {
   "name": "@zoeplane/plugin-sdk",
-  "version": "0.1.0",
+  "version": "0.0.1",
   "description": "ZoePlane Plugin SDK — public extension contract for third-party ZoePlane plugins",
   "license": "Apache-2.0",
   "type": "module",
-  "main": "src/index.ts",
+  "main": "./dist/index.js",
+  "module": "./dist/index.mjs",
+  "types": "./dist/index.d.ts",
   "exports": {
-    ".": "./src/index.ts",
-    "./tokens": "./src/tokens.ts"
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.mjs",
+      "require": "./dist/index.js"
+    }
   },
+  "files": [
+    "dist"
+  ],
   "scripts": {
     "typecheck": "tsc --noEmit",
-    "build": "tsc --project tsconfig.build.json"
+    "build": "tsup"
   },
   "peerDependencies": {},
   "devDependencies": {
+    "tsup": "^8.5.1",
     "typescript": "^5.5.0"
   },
   "repository": {

@@ -1,0 +1,12 @@
+# Exclude TypeScript build info artifacts from the published package.
+# The "files" field in package.json already scopes to dist/, but .tsbuildinfo
+# files inside dist/ would still ship without this exclusion.
+dist/*.tsbuildinfo
+dist/**/*.tsbuildinfo
+
+# Source files — consumers use the compiled dist/ output
+src/
+
+# Build config — not needed by consumers
+tsup.config.ts
+tsconfig*.json

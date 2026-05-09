@@ -1,0 +1,19 @@
+# Winget version manifest — BrinsCorpTech.ZoePlane
+#
+# STATIC STUB — not yet submitted to microsoft/winget-pkgs.
+# Submission is post-Sprint-1.
+#
+# OPERATOR ACTION REQUIRED (at each release):
+#   1. Update PackageVersion to match the release tag (without the "v" prefix).
+#   2. Submit via PR to https://github.com/microsoft/winget-pkgs following
+#      the winget-pkgs contribution guide.
+#   Alternatively, use the wingetcreate CLI:
+#     wingetcreate update --urls <installer-url> BrinsCorpTech.ZoePlane
+#
+# Schema: https://aka.ms/winget-manifest.version.1.9.0.schema.json
+
+PackageIdentifier: BrinsCorpTech.ZoePlane
+PackageVersion: "0.0.0"
+DefaultLocale: en-US
+ManifestType: version
+ManifestVersion: 1.9.0

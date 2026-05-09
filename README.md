@@ -110,7 +110,48 @@ ZoePlane/
 
 ## Releasing signed builds
 
-Pushing a `v*` tag triggers `release.yml`, which produces signed, notarized artifacts for macOS, Windows, and Linux. The workflow fails loudly if any required secret is absent — unsigned artifacts are never published.
+Pushing a `v*` tag (e.g. `v1.2.3`) triggers two independent workflows:
+
+- **`release.yml`** — builds signed, notarized platform artifacts (macOS, Windows, Linux) and publishes a GitHub Release draft
+- **`publish-sdk.yml`** — builds and publishes `@zoeplane/plugin-sdk` to npm
+
+Both workflows fail loudly if required secrets are absent. No unsigned artifacts or un-gated publishes occur.
+
+### Publishing the Plugin SDK
+
+`publish-sdk.yml` fires on the same tag pattern. Before the first SDK publish, a repository operator must:
+
+1. **Register the `@zoeplane` npm scope** — log in to npmjs.com as the BrinsCorp-Tech org account and create the `@zoeplane` organization scope
+2. **Create an automation token** — on npmjs.com under Account Settings → Access Tokens, create a granular token with read+write publish permission scoped to the `@zoeplane` packages
+3. **Configure the GHA secret** — add the token as `NPM_TOKEN` in the repository's GitHub Actions secrets (Settings → Secrets and variables → Actions)
+
+The workflow will emit `::error::NPM_TOKEN secret not configured` and exit 1 if the secret is absent.
+
+### Homebrew distribution
+
+A static Homebrew formula is committed at `packaging/homebrew/zoeplane.rb`. Before each release, an operator must:
+
+1. **Create the tap repo** (first time only) — create `brinscorp-tech/homebrew-zoeplane` on GitHub
+2. **Compute the SHA256** of the macOS universal `.tar.gz` artifact from the GitHub Release:
+   ```bash
+   shasum -a 256 ZoePlane_<version>_universal.tar.gz
+   ```
+3. **Update the formula** — replace the `REPLACE_BEFORE_PUBLISH_WITH_RELEASE_ARTIFACT_SHA256` placeholder and the version/URL in `packaging/homebrew/zoeplane.rb`
+4. **Copy to the tap repo** — place the updated formula at `Formula/zoeplane.rb` in the tap repo and commit
+
+Users install via:
+```bash
+brew tap brinscorp-tech/zoeplane
+brew install zoeplane
+```
+
+No cross-repo automation is wired — this is a manual operator action per release.
+
+### Winget distribution
+
+Winget manifest stubs are committed at `packaging/winget/BrinsCorpTech.ZoePlane/`. Submission to `microsoft/winget-pkgs` is **post-Sprint-1**. Before submitting, an operator must update the version, installer URL, and replace the `REPLACE_BEFORE_PUBLISH_WITH_RELEASE_ARTIFACT_SHA256` placeholder with the actual SHA256 of the Windows NSIS installer.
+
+### Platform signing secrets
 
 Before the first signed release, a repository operator must provision the following GitHub Actions secrets:
 
