@@ -59,23 +59,13 @@ The full expanded `appDataDir` for ZoePlane is:
 | Windows  | `%APPDATA%\com.brinscorp.zoeplane\`                     |
 | Linux    | `~/.local/share/com.brinscorp.zoeplane/`                |
 
-### Plugin Permissions
+### Plugin Permissions (Tauri 2.x Capability Model)
 
-Declared under `plugins.fs` in `tauri.conf.json`. Individual operations permitted by default:
+Plugin method permissions are **not** declared in `tauri.conf.json` in Tauri 2.x. The prior Tauri 1.x boolean-toggle schema (`plugins.fs.readFile: true`, `writeFile: true`, etc.) has been removed. Per ADR-002, method-level grants live in `src-tauri/capabilities/default.json`.
 
-| Operation    | Permitted |
-| ------------ | --------- |
-| `readFile`   | Yes       |
-| `writeFile`  | Yes       |
-| `readDir`    | Yes       |
-| `copyFile`   | No        |
-| `createDir`  | Yes       |
-| `removeDir`  | No        |
-| `removeFile` | No        |
-| `renameFile` | Yes       |
-| `exists`     | Yes       |
+The `plugins.fs` block in `tauri.conf.json` now contains only the `scope` field (the `allow`/`deny` path arrays documented in the Filesystem Allowlist section above). The `plugins.shell` block contains only `"open": false` (URL-open access is not granted in Sprint 1).
 
-Note: these plugin-level permissions are a secondary gate. The primary gate is the FS allowlist enforced by `commands/fs.rs`. Even a permitted operation is denied if the target path is outside the allowlist.
+See `docs/ARCHITECTURE.md` — "Tauri 2.x Capability Model" for the full permission surface table and the pattern for adding future plugin permissions.
 
 ### Deep-Link
 
@@ -150,4 +140,4 @@ Fields: `level` (`INFO` | `WARN` | `ERROR`), `message`, `pid`, plus any `extra` 
 
 ---
 
-_Last reviewed: 2026-05-09 by tech-writer agent against Sprint 1._
+_Last reviewed: 2026-05-10 by project-manager agent — Story 1.11 (Plugin Permissions section updated for Tauri 2.x capability model; 1.x boolean-toggle table removed)._

@@ -96,17 +96,62 @@ The source-of-truth split is:
 - **winget** — distribution via submission to `microsoft/winget-pkgs` (post-Sprint-1).
 - **Apple Notarization** — macOS builds are submitted to Apple's notarization service via `xcrun notarytool` (automated by `release.yml`, requires provisioned GHA secrets).
 
+## Tauri 2.x Capability Model
+
+ZoePlane adopts Tauri 2.x's capability-based ACL system in full, per **ADR-002**. This is the permanent pattern for every plugin permission, sidecar execution grant, and future plugin-host SDK boundary in this codebase.
+
+### How it works
+
+In Tauri 2.x, plugin method permissions are no longer declared inline in `tauri.conf.json`. Instead:
+
+- **`src-tauri/capabilities/default.json`** — the single capability file for Sprint 1. It enumerates every permission granted to the `main` window across all three platforms (`macOS`, `linux`, `windows`).
+- **`tauri.conf.json` `plugins.*` blocks** — retain only plugin-instance _configuration_ (filesystem allowlist scope, deep-link URL schemes, `shell.open` boolean). Method-level permissions have been removed.
+- **`src-tauri/gen/schemas/desktop-schema.json`** — the auto-generated catalog of all valid permission identifiers, produced by `tauri-build` from the installed plugin crates. This is the source of truth when adding new identifiers.
+
+### Sprint 1 capability surface (`capabilities/default.json`)
+
+| Identifier             | Purpose                                                                            |
+| ---------------------- | ---------------------------------------------------------------------------------- |
+| `core:default`         | Tauri baseline (path resolution, app metadata, resource loading, window lifecycle) |
+| `fs:default`           | FS plugin baseline (JS-side `BaseDirectory` enum and metadata helpers)             |
+| `fs:allow-read-file`   | `fs_read_file` IPC command                                                         |
+| `fs:allow-write-file`  | `fs_write_file` IPC command                                                        |
+| `fs:allow-read-dir`    | `fs_read_dir` IPC command                                                          |
+| `fs:allow-exists`      | `fs_exists` IPC command                                                            |
+| `fs:allow-mkdir`       | AppData directory bootstrap in `lib.rs::spawn_sidecar`                             |
+| `shell:allow-execute`  | Sidecar spawn only (scoped to `zoeplane-sidecar` with arg validators)              |
+| `dialog:default`       | Native dialog plugin baseline                                                      |
+| `notification:default` | Native notification plugin baseline                                                |
+| `process:default`      | App exit/restart IPC (clean-shutdown wiring in `lib.rs`)                           |
+| `deep-link:default`    | Deep-link URL scheme handler (`zoeplane://`)                                       |
+
+### Identifier discipline
+
+Enumerated `allow-*` permissions are used instead of blanket `<plugin>:default` identifiers wherever the plugin's default surface is broader than what is needed. `<plugin>:default` is a moving target across plugin minor versions — a plugin upgrade could silently expand the granted surface. Enumerated identifiers are stable.
+
+The one deliberate exception is `core:default`: it covers ~80 baseline identifiers whose stability across Tauri minor versions is contractually maintained by the Tauri project. Enumerating them individually would bury the meaningful permission grants under boilerplate.
+
+### Adding a new plugin or capability
+
+Future plugin additions follow the pattern established by ADR-002:
+
+1. Add the plugin crate to `src-tauri/Cargo.toml` and register it via `.plugin(tauri_plugin_<name>::init())` in `lib.rs`.
+2. Add the required `<plugin>:allow-<method>` identifiers to `capabilities/default.json` (or a new per-feature capability file if window-scoped restriction is needed).
+3. If the plugin requires instance configuration (allowlist scopes, URL schemes), add a `plugins.<name>` block to `tauri.conf.json` containing **only** configuration — never method permissions.
+4. If the plugin uses sidecar or external-binary execution, add a `shell:allow-execute` entry to `capabilities/default.json` — never to `tauri.conf.json`.
+
 ## Architectural Decisions
 
 See `docs/architecture/decisions/README.md` for the full ADR index.
 
 - **ADR-001** — Retains `com.brinscorp.zoeplane` as the permanent bundle identifier. Rationale: honest correspondence with the BrinsCorp-Tech signing trust root; changing after first release would require Apple notarization re-binding, Homebrew tap updates, winget renamespace, data migration, and deep-link re-registration.
+- **ADR-002** — Adopts Tauri 2.x's capability model in full, with four invariants: single capability file at `src-tauri/capabilities/default.json` for Sprint 1; enumerate every permission (no blanket `<plugin>:default` where the surface exceeds need); sidecar grants live in `capabilities/default.json`, never in `tauri.conf.json`; hard separation between plugin configuration (`tauri.conf.json`) and plugin permissions (capability files). See section above and ADR-002 for full rationale.
 
 ## Glossary
 
 **Sidecar** — The bun-compiled Node.js binary that the Tauri shell spawns at startup. Named "sidecar" per Tauri's external binary embedding terminology (`externalBin` in `tauri.conf.json`). Responsible for all Claude API/CLI work and the FS indexer.
 
-**FS allowlist** — The set of filesystem paths the Tauri app is permitted to access, declared in `tauri.conf.json` (`plugins.fs.scope.allow`). In Sprint 1: `$HOME/.claude/**`, `$APPDATA/com.brinscorp.zoeplane/**`, and `$APP/**`. All filesystem operations route through `commands/fs.rs` wrappers that enforce this allowlist and log violations.
+**FS allowlist** — The set of filesystem paths the Tauri app is permitted to access, declared in `tauri.conf.json` under `plugins.fs.scope.allow`. In Sprint 1: `$HOME/.claude/**`, `$APPDATA/com.brinscorp.zoeplane/**`, and `$APP/**`. The method-level permissions (`fs:allow-read-file`, `fs:allow-write-file`, etc.) are granted separately in `src-tauri/capabilities/default.json` per the Tauri 2.x capability model. All filesystem operations route through `commands/fs.rs` wrappers that enforce this allowlist and log violations.
 
 **IPC** — Inter-process communication. ZoePlane uses two IPC layers: (1) Tauri commands (`invoke()`) between React UI and Rust shell, and (2) HTTP loopback on `127.0.0.1` between the Rust shell and the sidecar.
 
@@ -118,4 +163,4 @@ See `docs/architecture/decisions/README.md` for the full ADR index.
 
 ---
 
-_Last reviewed: 2026-05-09 by tech-writer agent against Sprint 1._
+_Last reviewed: 2026-05-10 by project-manager agent — Story 1.11 (Tauri 2.x capability model adoption, ADR-002)._

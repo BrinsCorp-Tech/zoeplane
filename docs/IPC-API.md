@@ -9,6 +9,10 @@ ZoePlane uses two IPC layers:
 
 The React UI communicates only with the Rust shell via Tauri commands. The React UI never speaks to the sidecar directly. The Rust shell relays relevant requests to the sidecar over the HTTP loopback.
 
+### Capability gating
+
+All Tauri commands are gated by the Tauri 2.x capability model (ADR-002). The `main` window's granted capabilities are declared in `src-tauri/capabilities/default.json`. The FS commands (`fs_read_file`, `fs_write_file`, `fs_read_dir`, `fs_exists`) require the corresponding `fs:allow-*` identifiers to be present in that file; the `ping` and `sidecar_status` commands are covered by `core:default`. The Rust function signatures and error modes documented below are unchanged by the capability model migration — capability gating is enforced by Tauri before the command handler is invoked.
+
 ## Tauri Commands
 
 ### `ping`
@@ -211,4 +215,4 @@ These are documented here as forward declarations visible in the codebase commen
 
 ---
 
-_Last reviewed: 2026-05-09 by tech-writer agent against Sprint 1._
+_Last reviewed: 2026-05-10 by project-manager agent — Story 1.11 (capability gating note added)._

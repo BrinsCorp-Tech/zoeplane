@@ -1,0 +1,35 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "default",
+  "description": "Default capability set for the ZoePlane main window. Grants the minimum permission surface required by Sprint 1 IPC commands and plugin usage. Enumerated against src-tauri/gen/schemas/desktop-schema.json per ADR-002.",
+  "windows": ["main"],
+  "platforms": ["macOS", "linux", "windows"],
+  "permissions": [
+    "core:default",
+    "fs:default",
+    "fs:allow-read-file",
+    "fs:allow-write-file",
+    "fs:allow-read-dir",
+    "fs:allow-exists",
+    "fs:allow-mkdir",
+    {
+      "identifier": "shell:allow-execute",
+      "allow": [
+        {
+          "name": "zoeplane-sidecar",
+          "sidecar": true,
+          "args": [
+            "--db-path",
+            { "validator": "^.+$" },
+            "--migrations-dir",
+            { "validator": "^.+$" }
+          ]
+        }
+      ]
+    },
+    "dialog:default",
+    "notification:default",
+    "process:default",
+    "deep-link:default"
+  ]
+}

@@ -28,6 +28,16 @@ A `summary` job writes a results table to the GHA step summary regardless of out
 
 Branch protection on `main` and `develop` should require all matrix legs as required status checks (12 checks total: 3 platforms × 4 jobs). This is a manual repo-settings action — not enforced by the workflow YAML itself. TBD: required-checks registration is pending operator action.
 
+### Developer prerequisite: Tauri CLI
+
+Before running `bun run tauri:build` or `cargo tauri build` locally, the Tauri CLI must be installed via Cargo:
+
+```bash
+cargo install tauri-cli --version "^2" --locked
+```
+
+The `--locked` flag is required to ensure a reproducible toolchain install (matches `Cargo.lock` exactly). This is the same command documented in `CONTRIBUTING.md` and `docs/INSTALL.md`. The CLI is not included in `Cargo.toml` as a build dependency — it is a developer workstation prerequisite.
+
 ### Build steps (all pipelines)
 
 Every build follows this sequence:
@@ -204,4 +214,4 @@ Homebrew and winget distribution require manual operator action per release. Aut
 
 ---
 
-_Last reviewed: 2026-05-09 by tech-writer agent against Sprint 1._
+_Last reviewed: 2026-05-10 by project-manager agent — Story 1.11 (Tauri CLI developer prerequisite documented)._

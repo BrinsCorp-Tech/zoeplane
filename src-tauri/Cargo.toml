@@ -43,6 +43,7 @@ strip = true
 
 [dev-dependencies]
 tracing-test = { version = "0.2", features = ["no-env-filter"] }
+tempfile = "3"
 
 [profile.dev]
 # Fast incremental compilation in dev; no size optimization.
