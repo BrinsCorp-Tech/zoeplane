@@ -13,7 +13,7 @@ use serde::{Deserialize, Serialize};
 use tauri::State;
 use tracing::{error, info, warn};
 
-use crate::{HttpClient, SidecarHandle, SidecarPort};
+use crate::{HttpClient, SidecarPort};
 
 // ---------------------------------------------------------------------------
 // Types
@@ -30,6 +30,20 @@ pub struct SidecarStatus {
     /// Reserved for future use — will carry sidecar version string once
     /// Epic 02 adds richer health data.
     pub version: Option<String>,
+}
+
+impl SidecarStatus {
+    /// Constructs a "sidecar is down" status — used in all not-running branches
+    /// of `sidecar_status`. Named constructor rather than `Default` so that the
+    /// intent is explicit at every call site and future non-Optional fields force
+    /// a compile-time decision here rather than silently inheriting a zero value.
+    pub fn down() -> Self {
+        Self {
+            running: false,
+            pid: None,
+            version: None,
+        }
+    }
 }
 
 /// Shape of the sidecar's `GET /health` response body.
@@ -63,7 +77,6 @@ pub fn ping() -> &'static str {
 #[tauri::command]
 pub async fn sidecar_status(
     port_state: State<'_, SidecarPort>,
-    _handle_state: State<'_, SidecarHandle>,
     http_client: State<'_, HttpClient>,
 ) -> Result<SidecarStatus, String> {
     // Read the port that was captured from the sidecar's stdout announcement.
@@ -75,11 +88,7 @@ pub async fn sidecar_status(
     let Some(port) = port else {
         // Sidecar has not yet announced its port — still starting up.
         warn!(target: "sidecar-ipc", "Health-check called before sidecar port is known");
-        return Ok(SidecarStatus {
-            running: false,
-            pid: None,
-            version: None,
-        });
+        return Ok(SidecarStatus::down());
     };
 
     let url = format!("http://127.0.0.1:{port}/health");
@@ -109,11 +118,7 @@ pub async fn sidecar_status(
                     error = %e,
                     "Sidecar health-check: failed to parse response body"
                 );
-                Ok(SidecarStatus {
-                    running: false,
-                    pid: None,
-                    version: None,
-                })
+                Ok(SidecarStatus::down())
             }
         },
         Ok(resp) => {
@@ -124,11 +129,7 @@ pub async fn sidecar_status(
                 %url,
                 "Sidecar health-check returned non-success status"
             );
-            Ok(SidecarStatus {
-                running: false,
-                pid: None,
-                version: None,
-            })
+            Ok(SidecarStatus::down())
         }
         Err(e) if e.is_timeout() => {
             // AC5: log the timeout event with enough context to identify the request.
@@ -138,11 +139,7 @@ pub async fn sidecar_status(
                 timeout_ms = 100,
                 "Sidecar health-check IPC timeout — sidecar did not respond within 100 ms"
             );
-            Ok(SidecarStatus {
-                running: false,
-                pid: None,
-                version: None,
-            })
+            Ok(SidecarStatus::down())
         }
         Err(e) => {
             // Connection refused, OS error, etc. — sidecar likely crashed.
@@ -152,11 +149,7 @@ pub async fn sidecar_status(
                 %url,
                 "Sidecar health-check request failed"
             );
-            Ok(SidecarStatus {
-                running: false,
-                pid: None,
-                version: None,
-            })
+            Ok(SidecarStatus::down())
         }
     }
 }
