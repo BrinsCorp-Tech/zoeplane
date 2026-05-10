@@ -25,6 +25,7 @@ import { version } from "../package.json";
 import { join } from "node:path";
 import { openDatabase } from "./db/client";
 import { runMigrations } from "./db/runner";
+import { log } from "./log";
 
 // ---------------------------------------------------------------------------
 // CLI argument parsing — DB path (required, supplied by Tauri shell at spawn)
@@ -40,14 +41,10 @@ function parseDbPath(): string {
   const args = process.argv.slice(2);
   const idx = args.indexOf("--db-path");
   if (idx === -1 || args[idx + 1] === undefined) {
-    console.error(
-      JSON.stringify({
-        level: "ERROR",
-        message:
-          "Sidecar startup failed: required argument --db-path not provided. " +
-          "The Tauri shell must resolve appDataDir() and pass it as --db-path <path>.",
-        pid: process.pid,
-      })
+    log(
+      "ERROR",
+      "Sidecar startup failed: required argument --db-path not provided. " +
+        "The Tauri shell must resolve appDataDir() and pass it as --db-path <path>."
     );
     process.exit(1);
   }
@@ -82,29 +79,18 @@ function parseMigrationsDir(): MigrationsDirResult {
   // import.meta.dir is Bun's equivalent of __dirname and works in both source
   // and compiled-binary modes.
   const fallback = join(import.meta.dir, "db", "migrations");
-  console.error(
-    JSON.stringify({
-      level: "WARN",
-      message:
-        "Sidecar: --migrations-dir not supplied; falling back to dev-mode path. " +
-        "Production builds must supply this argument.",
-      fallback,
-      pid: process.pid,
-    })
+  log(
+    "WARN",
+    "Sidecar: --migrations-dir not supplied; falling back to dev-mode path. " +
+      "Production builds must supply this argument.",
+    { fallback }
   );
   return { path: fallback, isFallback: true };
 }
 
 // Log startup to stderr (structured JSON for the lifecycle log channel).
 // Tauri wires sidecar stderr to tracing so this surfaces in RUST_LOG output.
-console.error(
-  JSON.stringify({
-    level: "INFO",
-    message: "ZoePlane sidecar starting",
-    version,
-    pid: process.pid,
-  })
-);
+log("INFO", "ZoePlane sidecar starting", { version });
 
 // ---------------------------------------------------------------------------
 // Database initialisation — MUST complete before the HTTP server starts.
@@ -113,27 +99,13 @@ console.error(
 
 const dbPath = parseDbPath();
 
-console.error(
-  JSON.stringify({
-    level: "INFO",
-    message: "Opening SQLite database",
-    dbPath,
-    pid: process.pid,
-  })
-);
+log("INFO", "Opening SQLite database", { dbPath });
 
 const db = openDatabase(dbPath);
 const migrationsDir = parseMigrationsDir();
 runMigrations(db, migrationsDir.path, migrationsDir.isFallback);
 
-console.error(
-  JSON.stringify({
-    level: "INFO",
-    message: "Database ready",
-    dbPath,
-    pid: process.pid,
-  })
-);
+log("INFO", "Database ready", { dbPath });
 
 // ---------------------------------------------------------------------------
 // HTTP loopback server (Sprint 1 IPC transport — operator decision 2026-05-07)
@@ -168,32 +140,20 @@ const server = Bun.serve({
 // Tauri-monitored channel for this announcement.
 process.stdout.write(JSON.stringify({ port: server.port }) + "\n");
 
-console.error(
-  JSON.stringify({
-    level: "INFO",
-    message: "ZoePlane sidecar HTTP server ready",
-    hostname: "127.0.0.1",
-    port: server.port,
-    pid: process.pid,
-  })
-);
+log("INFO", "ZoePlane sidecar HTTP server ready", { hostname: "127.0.0.1", port: server.port });
 
 // ---------------------------------------------------------------------------
 // Signal handlers — clean shutdown
 // ---------------------------------------------------------------------------
 
 process.on("SIGTERM", () => {
-  console.error(
-    JSON.stringify({ level: "INFO", message: "Sidecar SIGTERM — shutting down", pid: process.pid })
-  );
+  log("INFO", "Sidecar SIGTERM — shutting down");
   server.stop(true);
   process.exit(0);
 });
 
 process.on("SIGINT", () => {
-  console.error(
-    JSON.stringify({ level: "INFO", message: "Sidecar SIGINT — shutting down", pid: process.pid })
-  );
+  log("INFO", "Sidecar SIGINT — shutting down");
   server.stop(true);
   process.exit(0);
 });

@@ -41,6 +41,9 @@ codegen-units = 1
 panic = "abort"
 strip = true
 
+[dev-dependencies]
+tracing-test = { version = "0.2", features = ["no-env-filter"] }
+
 [profile.dev]
 # Fast incremental compilation in dev; no size optimization.
 opt-level = 0

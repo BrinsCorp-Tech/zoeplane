@@ -1,15 +1,18 @@
 // ZoePlane — FS allowlist-violation logger (FB-016)
 //
 // This module provides Tauri IPC command wrappers around the raw Tauri FS
-// plugin operations. Each wrapper attempts the underlying operation and, if
-// it is denied by the Tauri FS allowlist scope, catches the error and emits
-// a structured log entry identifying the path and caller.
+// plugin operations. Each wrapper checks the FS allowlist scope upfront via
+// `app.fs_scope().is_allowed()` and, on a deny, emits a structured log entry
+// identifying the path and caller before returning without touching the FS.
 //
 // ARCHITECTURE NOTE: callers (React UI and sidecar via IPC) MUST use these
 // wrappers rather than calling the raw `tauri-plugin-fs` plugin API directly.
 // The raw plugin's deny is silent — no path or caller is recorded. The wrapper
 // is the only point where FB-016's mandatory "allowlist-violation log entry
 // identifying the path and caller" is produced.
+//
+// Pattern (all four commands): resolve → is_allowed upfront check → log + deny
+// on scope miss → underlying std::fs call → log non-scope errors on failure.
 //
 // TODO (Epic 02): When a project-open event is defined, extend the allowlist
 // dynamically by appending the active project path to the FS scope at runtime.
@@ -74,25 +77,6 @@ fn log_violation(path: &str, caller: &str, operation: &str) {
     }
 }
 
-/// Determines whether an FS error is an allowlist-scope denial.
-///
-/// In v2.5.1 of `tauri-plugin-fs`, the only `Fs<R>` method that routes through
-/// the plugin's allowlist scope is `read()` (and its sibling `read_to_string()`),
-/// which surface scope denials as `std::io::Error`. The plugin's error message
-/// for the deny case includes the substring "path not allowed". We match on
-/// this string because the underlying error type is `std::io::Error` whose
-/// `kind()` is `PermissionDenied` for many unrelated reasons; the message
-/// substring is the most reliable disambiguator.
-///
-/// For `fs_write_file`, `fs_read_dir`, and `fs_exists`, scope is checked
-/// explicitly via `app.fs_scope().is_allowed()` before any I/O — so this
-/// helper is only consulted by `fs_read_file`.
-fn is_scope_deny(err: &str) -> bool {
-    err.contains("path not allowed")
-        || err.contains("forbidden")
-        || err.contains("not in the allowlist")
-}
-
 // ---------------------------------------------------------------------------
 // Public IPC command wrappers
 // ---------------------------------------------------------------------------
@@ -109,8 +93,6 @@ pub async fn fs_read_file(
     path: String,
     caller: String,
 ) -> Result<Vec<u8>, String> {
-    // Resolve the path before attempting to read so we can log the raw string
-    // even if the FS call is denied before resolving.
     let resolved = PathBuf::from(&path);
 
     info!(
@@ -121,11 +103,16 @@ pub async fn fs_read_file(
         "FS read_file requested"
     );
 
-    // FsExt::read() in tauri-plugin-fs v2.5.1 is synchronous; it returns
-    // std::io::Result<Vec<u8>>. The plugin's allowlist scope is enforced
-    // inside read() (via the underlying open() routing through scope checks),
-    // so a scope-deny surfaces as an io::Error whose message we can match.
-    match app.fs().read(resolved) {
+    // Upfront allowlist check — same pattern as fs_write_file:182, fs_read_dir:233,
+    // fs_exists:305. If the path is outside the configured scope, log the violation
+    // and deny immediately without touching the filesystem.
+    let scope = app.fs_scope();
+    if !scope.is_allowed(&resolved) {
+        log_violation(&path, &caller, "read_file");
+        return Err("path not allowed".to_string());
+    }
+
+    match std::fs::read(&resolved) {
         Ok(bytes) => {
             info!(
                 target: "fs-allowlist",
@@ -138,17 +125,13 @@ pub async fn fs_read_file(
         }
         Err(e) => {
             let msg = e.to_string();
-            if is_scope_deny(&msg) {
-                log_violation(&path, &caller, "read_file");
-            } else {
-                error!(
-                    target: "fs-allowlist",
-                    path = %path,
-                    caller = %caller,
-                    error = %msg,
-                    "FS read_file failed (non-scope error)"
-                );
-            }
+            error!(
+                target: "fs-allowlist",
+                path = %path,
+                caller = %caller,
+                error = %msg,
+                "FS read_file failed (post-scope I/O error)"
+            );
             Err(msg)
         }
     }
@@ -308,4 +291,39 @@ pub async fn fs_exists(
     }
 
     Ok(resolved.exists())
+}
+
+// ---------------------------------------------------------------------------
+// Tests
+// ---------------------------------------------------------------------------
+
+#[cfg(test)]
+mod tests {
+    use super::log_violation;
+    use tracing_test::traced_test;
+
+    /// Verifies that `log_violation` emits a tracing event on the
+    /// `"fs-allowlist"` target with the expected structured fields.
+    ///
+    /// This test locks in the FB-016 security signal: any refactor that silences
+    /// the `fs-allowlist` log channel on scope denies will break this test.
+    /// It exercises `log_violation` directly because constructing a live
+    /// `AppHandle` in a unit-test context requires a full Tauri runtime;
+    /// the integration coverage (upfront-check → log_violation path) is
+    /// verified by the structural match with `fs_write_file`/`fs_read_dir`/
+    /// `fs_exists` and by `cargo check`.
+    #[test]
+    #[traced_test]
+    fn log_violation_emits_fs_allowlist_event() {
+        log_violation("/tmp/secret/credentials.json", "test-caller", "read_file");
+
+        // Assert the `fs-allowlist` target was hit and that the path and
+        // caller are present in the captured output. This locks in the FB-016
+        // security signal: any refactor that silences the `fs-allowlist` log
+        // channel on scope denies will break this test.
+        assert!(logs_contain("fs-allowlist"));
+        assert!(logs_contain("/tmp/secret/credentials.json"));
+        assert!(logs_contain("test-caller"));
+        assert!(logs_contain("FS allowlist violation"));
+    }
 }

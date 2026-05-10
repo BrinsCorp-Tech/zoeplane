@@ -21,6 +21,7 @@
 import type { Database } from "bun:sqlite";
 import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
+import { log } from "../log";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -55,36 +56,21 @@ export function runMigrations(db: Database, migrationsDir: string, isFallback: b
   const pending = discoverPendingMigrations(db, migrationsDir, isFallback);
 
   if (pending.length === 0) {
-    console.error(
-      JSON.stringify({
-        level: "INFO",
-        message: "Migration runner: no pending migrations",
-      })
-    );
+    log("INFO", "Migration runner: no pending migrations");
     return;
   }
 
-  console.error(
-    JSON.stringify({
-      level: "INFO",
-      message: "Migration runner: applying migrations",
-      count: pending.length,
-      versions: pending.map((m) => m.version),
-    })
-  );
+  log("INFO", "Migration runner: applying migrations", {
+    count: pending.length,
+    versions: pending.map((m) => m.version),
+  });
 
   // Step 3: Apply each pending migration inside its own transaction.
   for (const migration of pending) {
     applyMigration(db, migration);
   }
 
-  console.error(
-    JSON.stringify({
-      level: "INFO",
-      message: "Migration runner: all migrations applied",
-      count: pending.length,
-    })
-  );
+  log("INFO", "Migration runner: all migrations applied", { count: pending.length });
 }
 
 // ---------------------------------------------------------------------------
@@ -143,28 +129,20 @@ function discoverPendingMigrations(
       // Dev-fallback path: directory may simply not exist yet (e.g. fresh checkout
       // with no local migrations). Warn and continue — the runner is still
       // operational with zero migrations.
-      console.error(
-        JSON.stringify({
-          level: "WARN",
-          message: "Migration runner: migrations directory not readable — skipping (dev fallback)",
-          migrationsDir,
-          error: String(err),
-        })
-      );
+      log("WARN", "Migration runner: migrations directory not readable — skipping (dev fallback)", {
+        migrationsDir,
+        error: String(err),
+      });
       return [];
     }
     // Explicit production path (--migrations-dir was supplied by the Tauri shell).
     // An unreadable directory means a misconfigured bundle — fail loudly so the
     // problem surfaces immediately rather than producing a half-initialised DB.
-    console.error(
-      JSON.stringify({
-        level: "ERROR",
-        message:
-          "Migration runner: explicit --migrations-dir is not readable — " +
-          "this indicates a misconfigured bundle. Aborting.",
-        migrationsDir,
-        error: String(err),
-      })
+    log(
+      "ERROR",
+      "Migration runner: explicit --migrations-dir is not readable — " +
+        "this indicates a misconfigured bundle. Aborting.",
+      { migrationsDir, error: String(err) }
     );
     process.exit(1);
   }
@@ -175,13 +153,7 @@ function discoverPendingMigrations(
   for (const file of files) {
     const match = MIGRATION_RE.exec(file);
     if (match === null) {
-      console.error(
-        JSON.stringify({
-          level: "WARN",
-          message: "Migration runner: skipping non-conforming file",
-          file,
-        })
-      );
+      log("WARN", "Migration runner: skipping non-conforming file", { file });
       continue;
     }
 
@@ -192,14 +164,10 @@ function discoverPendingMigrations(
     // fails equality checks against appliedSet and causes silent re-runs on every
     // startup.  Treat such filenames as malformed dev-side artifacts and skip.
     if (!Number.isSafeInteger(version) || version < 1) {
-      console.error(
-        JSON.stringify({
-          level: "WARN",
-          message: "Migration runner: skipping file with out-of-range version number",
-          file,
-          parsedVersion: version,
-        })
-      );
+      log("WARN", "Migration runner: skipping file with out-of-range version number", {
+        file,
+        parsedVersion: version,
+      });
       continue;
     }
 
@@ -229,26 +197,18 @@ function applyMigration(db: Database, migration: PendingMigration): void {
   try {
     sql = readFileSync(migration.filePath, "utf-8");
   } catch (err) {
-    console.error(
-      JSON.stringify({
-        level: "ERROR",
-        message: "Migration runner: failed to read migration file",
-        migration: migration.name,
-        filePath: migration.filePath,
-        error: String(err),
-      })
-    );
+    log("ERROR", "Migration runner: failed to read migration file", {
+      migration: migration.name,
+      filePath: migration.filePath,
+      error: String(err),
+    });
     process.exit(1);
   }
 
-  console.error(
-    JSON.stringify({
-      level: "INFO",
-      message: "Migration runner: applying migration",
-      version: migration.version,
-      name: migration.name,
-    })
-  );
+  log("INFO", "Migration runner: applying migration", {
+    version: migration.version,
+    name: migration.name,
+  });
 
   // Wrap the migration SQL and the tracking INSERT in a single transaction.
   // bun:sqlite's `transaction()` creates a deferred transaction; on error it
@@ -269,24 +229,16 @@ function applyMigration(db: Database, migration: PendingMigration): void {
     apply();
   } catch (err) {
     // Transaction was automatically rolled back by bun:sqlite on throw.
-    console.error(
-      JSON.stringify({
-        level: "ERROR",
-        message: "Migration runner: migration failed — transaction rolled back",
-        version: migration.version,
-        name: migration.name,
-        error: String(err),
-      })
-    );
+    log("ERROR", "Migration runner: migration failed — transaction rolled back", {
+      version: migration.version,
+      name: migration.name,
+      error: String(err),
+    });
     process.exit(1);
   }
 
-  console.error(
-    JSON.stringify({
-      level: "INFO",
-      message: "Migration runner: migration applied successfully",
-      version: migration.version,
-      name: migration.name,
-    })
-  );
+  log("INFO", "Migration runner: migration applied successfully", {
+    version: migration.version,
+    name: migration.name,
+  });
 }
