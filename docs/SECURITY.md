@@ -5,25 +5,27 @@
 ZoePlane is a local desktop application. It does not operate a network service, does not send telemetry, and does not persist Claude session content. The trust boundary is the local machine: all processes run under the current user's credentials, and no remote party can issue commands to ZoePlane.
 
 **In scope:**
+
 - Preventing plugin code from escaping its sandbox (filesystem, IPC, hook-authoring boundaries)
 - Preventing React UI from bypassing the Tauri FS allowlist
 - Ensuring sidecar-to-Tauri communication is limited to the loopback interface
 - Logging FS allowlist violations so operators can detect accidental or intentional scope creep
 
 **Out of scope:**
+
 - Protecting against a malicious actor with local OS access (ZoePlane has no privilege separation beyond what Tauri provides)
 - Protecting against a compromised `~/.claude/` directory (ZoePlane reads this directory as-is; it does not validate skill or hook content before display — that is the Skill Safety Evaluator's job, which ships in Epic 05)
 - Network-level security (no network surface beyond loopback)
 
 ## Surface Area
 
-| Surface | Description |
-|---|---|
-| Tauri IPC | `invoke()` commands from the React UI to the Rust shell. The IPC channel is local-process-only — not accessible from outside the app window. |
-| HTTP loopback | `GET http://127.0.0.1:{port}/health` issued by the Tauri shell to the sidecar. Bound to `127.0.0.1` (not `0.0.0.0`); not reachable from other machines or other local users on the same host under standard OS network isolation. |
-| Filesystem | `$HOME/.claude/**`, `$APPDATA/com.brinscorp.zoeplane/**`, and `$APP/**` — see FS Allowlist below. |
-| `zoeplane://` URL scheme | Registered with the host OS via `tauri-plugin-deep-link`. In Sprint 1 the handler logs the URL and takes no action. Deep-link dispatch is Epic 10. |
-| Plugin iframes | Not active in Sprint 1. When implemented (Epic 04), plugins run in sandboxed iframes with capability gating. |
+| Surface                  | Description                                                                                                                                                                                                                       |
+| ------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Tauri IPC                | `invoke()` commands from the React UI to the Rust shell. The IPC channel is local-process-only — not accessible from outside the app window.                                                                                      |
+| HTTP loopback            | `GET http://127.0.0.1:{port}/health` issued by the Tauri shell to the sidecar. Bound to `127.0.0.1` (not `0.0.0.0`); not reachable from other machines or other local users on the same host under standard OS network isolation. |
+| Filesystem               | `$HOME/.claude/**`, `$APPDATA/com.brinscorp.zoeplane/**`, and `$APP/**` — see FS Allowlist below.                                                                                                                                 |
+| `zoeplane://` URL scheme | Registered with the host OS via `tauri-plugin-deep-link`. In Sprint 1 the handler logs the URL and takes no action. Deep-link dispatch is Epic 10.                                                                                |
+| Plugin iframes           | Not active in Sprint 1. When implemented (Epic 04), plugins run in sandboxed iframes with capability gating.                                                                                                                      |
 
 ## Default Protections
 
@@ -72,6 +74,7 @@ To report a security vulnerability in ZoePlane, email the BrinsCorp-Tech securit
 **security@brinscorp.tech** (TBD — pending operator provisioning of security contact address)
 
 Please include:
+
 1. Description of the vulnerability and affected component
 2. Reproduction steps (or a proof-of-concept)
 3. Your assessment of impact
@@ -97,4 +100,4 @@ We will credit reporters in the release notes and CHANGELOG unless anonymity is 
 
 ---
 
-*Last reviewed: 2026-05-09 by tech-writer agent against Sprint 1.*
+_Last reviewed: 2026-05-09 by tech-writer agent against Sprint 1._

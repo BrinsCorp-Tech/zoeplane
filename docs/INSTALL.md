@@ -2,11 +2,11 @@
 
 ## Supported Platforms
 
-| Platform | Minimum OS version | Architecture |
-|---|---|---|
-| macOS | 13 Ventura | Apple Silicon (arm64), Intel (x86_64), Universal binary |
-| Windows | Windows 10 (64-bit) | x86_64 |
-| Linux | Ubuntu 22.04 or equivalent glibc ≥ 2.35 | x86_64 |
+| Platform | Minimum OS version                      | Architecture                                            |
+| -------- | --------------------------------------- | ------------------------------------------------------- |
+| macOS    | 13 Ventura                              | Apple Silicon (arm64), Intel (x86_64), Universal binary |
+| Windows  | Windows 10 (64-bit)                     | x86_64                                                  |
+| Linux    | Ubuntu 22.04 or equivalent glibc ≥ 2.35 | x86_64                                                  |
 
 macOS 13 is the minimum because Tauri 2.0 requires the WebKit version shipped with Ventura. Earlier macOS releases are not supported.
 
@@ -46,14 +46,14 @@ An RPM (`.rpm`) and AppImage (`.AppImage`) are also available on the GitHub Rele
 
 Download the appropriate artifact from the GitHub Releases page at `github.com/BrinsCorp-Tech/zoeplane/releases`:
 
-| Platform | Artifact | Notes |
-|---|---|---|
-| macOS | `ZoePlane_<version>_universal.dmg` | Drag-to-Applications installer |
-| Windows | `ZoePlane_<version>_x64_en-US.msi` | MSI installer |
-| Windows | `ZoePlane_<version>_x64-setup.exe` | NSIS installer |
-| Linux | `ZoePlane_<version>_amd64.deb` | Debian/Ubuntu |
-| Linux | `ZoePlane_<version>_x86_64.rpm` | Red Hat/Fedora |
-| Linux | `ZoePlane_<version>_x86_64.AppImage` | Portable, any distro |
+| Platform | Artifact                             | Notes                          |
+| -------- | ------------------------------------ | ------------------------------ |
+| macOS    | `ZoePlane_<version>_universal.dmg`   | Drag-to-Applications installer |
+| Windows  | `ZoePlane_<version>_x64_en-US.msi`   | MSI installer                  |
+| Windows  | `ZoePlane_<version>_x64-setup.exe`   | NSIS installer                 |
+| Linux    | `ZoePlane_<version>_amd64.deb`       | Debian/Ubuntu                  |
+| Linux    | `ZoePlane_<version>_x86_64.rpm`      | Red Hat/Fedora                 |
+| Linux    | `ZoePlane_<version>_x86_64.AppImage` | Portable, any distro           |
 
 ### Build from source
 
@@ -177,4 +177,4 @@ rm ~/Applications/ZoePlane-<version>-x86_64.AppImage
 
 ---
 
-*Last reviewed: 2026-05-09 by tech-writer agent against Sprint 1.*
+_Last reviewed: 2026-05-09 by tech-writer agent against Sprint 1._

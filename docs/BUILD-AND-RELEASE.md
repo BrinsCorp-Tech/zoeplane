@@ -4,12 +4,12 @@
 
 ZoePlane uses four GitHub Actions workflows:
 
-| Workflow | File | Trigger | Purpose |
-|---|---|---|---|
-| CI | `.github/workflows/ci.yml` | PR into `main` or `develop` | Lint + typecheck + test + unsigned build matrix across all 3 platforms |
-| Nightly | `.github/workflows/nightly.yml` | Daily at 07:00 UTC + manual dispatch | Same matrix as CI, against `main` |
-| Release | `.github/workflows/release.yml` | Push of a `v*.*.*` semver tag | Signed, distributable artifacts for macOS + Windows + Linux; publishes a GitHub Release draft |
-| Publish SDK | `.github/workflows/publish-sdk.yml` | Same `v*.*.*` tag as Release | Builds and publishes `@zoeplane/plugin-sdk` to npm |
+| Workflow    | File                                | Trigger                              | Purpose                                                                                       |
+| ----------- | ----------------------------------- | ------------------------------------ | --------------------------------------------------------------------------------------------- |
+| CI          | `.github/workflows/ci.yml`          | PR into `main` or `develop`          | Lint + typecheck + test + unsigned build matrix across all 3 platforms                        |
+| Nightly     | `.github/workflows/nightly.yml`     | Daily at 07:00 UTC + manual dispatch | Same matrix as CI, against `main`                                                             |
+| Release     | `.github/workflows/release.yml`     | Push of a `v*.*.*` semver tag        | Signed, distributable artifacts for macOS + Windows + Linux; publishes a GitHub Release draft |
+| Publish SDK | `.github/workflows/publish-sdk.yml` | Same `v*.*.*` tag as Release         | Builds and publishes `@zoeplane/plugin-sdk` to npm                                            |
 
 ### What runs on PR (ci.yml)
 
@@ -61,10 +61,10 @@ Trigger: `v*.*.*` tag push, job `release-macos` on `macos-latest`.
 
 Build target: `--target universal-apple-darwin` (fat binary — Apple Silicon + Intel).
 
-| Artifact | Format | Notes |
-|---|---|---|
-| `ZoePlane.app` (inside `.dmg`) | macOS application bundle | Codesigned + notarized |
-| `ZoePlane_<version>_universal.dmg` | Disk image | Drag-to-Applications installer |
+| Artifact                           | Format                   | Notes                          |
+| ---------------------------------- | ------------------------ | ------------------------------ |
+| `ZoePlane.app` (inside `.dmg`)     | macOS application bundle | Codesigned + notarized         |
+| `ZoePlane_<version>_universal.dmg` | Disk image               | Drag-to-Applications installer |
 
 Upload to GitHub Releases draft via `tauri-apps/tauri-action@v0`.
 
@@ -72,19 +72,19 @@ Upload to GitHub Releases draft via `tauri-apps/tauri-action@v0`.
 
 Trigger: `v*.*.*` tag push, job `release-windows` on `windows-latest`.
 
-| Artifact | Format | Notes |
-|---|---|---|
+| Artifact                           | Format         | Notes               |
+| ---------------------------------- | -------------- | ------------------- |
 | `ZoePlane_<version>_x64-setup.exe` | NSIS installer | Authenticode-signed |
-| `ZoePlane_<version>_x64_en-US.msi` | MSI installer | Authenticode-signed |
+| `ZoePlane_<version>_x64_en-US.msi` | MSI installer  | Authenticode-signed |
 
 ### Linux
 
 Trigger: `v*.*.*` tag push, job `release-linux` on `ubuntu-22.04`.
 
-| Artifact | Format | Notes |
-|---|---|---|
-| `ZoePlane_<version>_amd64.deb` | Debian package | GPG-signed |
-| `ZoePlane_<version>_x86_64.rpm` | RPM package | GPG-signed |
+| Artifact                             | Format          | Notes                       |
+| ------------------------------------ | --------------- | --------------------------- |
+| `ZoePlane_<version>_amd64.deb`       | Debian package  | GPG-signed                  |
+| `ZoePlane_<version>_x86_64.rpm`      | RPM package     | GPG-signed                  |
 | `ZoePlane_<version>_x86_64.AppImage` | Portable binary | GPG-signed via AppImageTool |
 
 ## Signing Chain
@@ -116,18 +116,18 @@ Source: `.github/workflows/release.yml:293-330`.
 
 Before the first signed release, a repository operator must provision all 10 of the following GitHub Actions secrets:
 
-| Secret | Platform | Description |
-|---|---|---|
-| `APPLE_CERTIFICATE` | macOS | Base64-encoded `.p12` Developer ID certificate |
-| `APPLE_CERTIFICATE_PASSWORD` | macOS | Password for the `.p12` |
-| `APPLE_SIGNING_IDENTITY` | macOS | Developer ID Application string (e.g. `Developer ID Application: BrinsCorp-Tech (TEAMID)`) |
-| `APPLE_ID` | macOS | Apple ID email for notarization |
-| `APPLE_PASSWORD` | macOS | App-specific password for the Apple ID |
-| `APPLE_TEAM_ID` | macOS | Apple Developer Team ID |
-| `WINDOWS_CERTIFICATE` | Windows | Base64-encoded `.pfx` Authenticode certificate |
-| `WINDOWS_CERTIFICATE_PASSWORD` | Windows | Password for the `.pfx` |
-| `LINUX_GPG_PRIVATE_KEY` | Linux | Armored GPG private key |
-| `LINUX_GPG_PASSPHRASE` | Linux | Passphrase for the GPG key |
+| Secret                         | Platform | Description                                                                                |
+| ------------------------------ | -------- | ------------------------------------------------------------------------------------------ |
+| `APPLE_CERTIFICATE`            | macOS    | Base64-encoded `.p12` Developer ID certificate                                             |
+| `APPLE_CERTIFICATE_PASSWORD`   | macOS    | Password for the `.p12`                                                                    |
+| `APPLE_SIGNING_IDENTITY`       | macOS    | Developer ID Application string (e.g. `Developer ID Application: BrinsCorp-Tech (TEAMID)`) |
+| `APPLE_ID`                     | macOS    | Apple ID email for notarization                                                            |
+| `APPLE_PASSWORD`               | macOS    | App-specific password for the Apple ID                                                     |
+| `APPLE_TEAM_ID`                | macOS    | Apple Developer Team ID                                                                    |
+| `WINDOWS_CERTIFICATE`          | Windows  | Base64-encoded `.pfx` Authenticode certificate                                             |
+| `WINDOWS_CERTIFICATE_PASSWORD` | Windows  | Password for the `.pfx`                                                                    |
+| `LINUX_GPG_PRIVATE_KEY`        | Linux    | Armored GPG private key                                                                    |
+| `LINUX_GPG_PASSPHRASE`         | Linux    | Passphrase for the GPG key                                                                 |
 
 TBD: all 10 secrets are pending operator provisioning as of Sprint 1. Each release workflow validates its required secrets at the start and fails loudly (before spending build time) if any are absent.
 
@@ -204,4 +204,4 @@ Homebrew and winget distribution require manual operator action per release. Aut
 
 ---
 
-*Last reviewed: 2026-05-09 by tech-writer agent against Sprint 1.*
+_Last reviewed: 2026-05-09 by tech-writer agent against Sprint 1._

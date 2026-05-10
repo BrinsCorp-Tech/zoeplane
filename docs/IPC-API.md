@@ -22,6 +22,7 @@ The React UI communicates only with the Rust shell via Tauri commands. The React
 **Returns**: `string` — always `"pong"`
 
 **Example (TypeScript)**:
+
 ```typescript
 import { invoke } from "@tauri-apps/api/core";
 const result = await invoke<string>("ping");
@@ -42,22 +43,24 @@ const result = await invoke<string>("ping");
 
 ```typescript
 interface SidecarStatus {
-  running: boolean;     // true if the sidecar responded within 100 ms
-  pid: number | null;   // OS PID reported by the sidecar's /health response
+  running: boolean; // true if the sidecar responded within 100 ms
+  pid: number | null; // OS PID reported by the sidecar's /health response
   version: string | null; // reserved for future use; always null in Sprint 1
 }
 ```
 
 **Error modes**:
+
 - Returns `{ running: false, pid: null, version: null }` (not a rejected promise) in all failure cases: port not yet known, HTTP timeout (>100 ms), connection refused, non-success HTTP status.
 - Logs to `sidecar-ipc` tracing target on all failures; timeout events are logged at ERROR with `timeout_ms: 100`.
 
 **Example (TypeScript)**:
+
 ```typescript
 import { invoke } from "@tauri-apps/api/core";
 
 const status = await invoke<{ running: boolean; pid: number | null; version: string | null }>(
-  "sidecar_status"
+  "sidecar_status",
 );
 if (status.running) {
   console.log("Sidecar is up, PID:", status.pid);
@@ -74,18 +77,20 @@ if (status.running) {
 
 **Parameters**:
 
-| Name | Type | Description |
-|---|---|---|
-| `path` | `string` | Absolute path to the file to read |
+| Name     | Type     | Description                                                                                                                                            |
+| -------- | -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `path`   | `string` | Absolute path to the file to read                                                                                                                      |
 | `caller` | `string` | Short stable identifier for the invoking component (e.g., `"ProjectList"`, `"SettingsPanel"`, `"sidecar:indexer"`). Included in violation log entries. |
 
 **Returns**: `Uint8Array` (raw bytes) on success.
 
 **Error modes**:
+
 - Returns `Err("path not allowed")` if the path is outside the FS allowlist. A structured violation log entry is emitted at ERROR level on the `fs-allowlist` tracing target before returning.
 - Returns `Err(<OS error message>)` on I/O failure after the allowlist check passes.
 
 **Example (TypeScript)**:
+
 ```typescript
 import { invoke } from "@tauri-apps/api/core";
 
@@ -106,11 +111,11 @@ const text = new TextDecoder().decode(bytes);
 
 **Parameters**:
 
-| Name | Type | Description |
-|---|---|---|
-| `path` | `string` | Absolute path to write |
-| `contents` | `number[]` | File contents as a byte array |
-| `caller` | `string` | Invoking component identifier (for violation logs) |
+| Name       | Type       | Description                                        |
+| ---------- | ---------- | -------------------------------------------------- |
+| `path`     | `string`   | Absolute path to write                             |
+| `contents` | `number[]` | File contents as a byte array                      |
+| `caller`   | `string`   | Invoking component identifier (for violation logs) |
 
 **Returns**: `null` (void) on success.
 
@@ -126,10 +131,10 @@ const text = new TextDecoder().decode(bytes);
 
 **Parameters**:
 
-| Name | Type | Description |
-|---|---|---|
-| `path` | `string` | Absolute path to the directory |
-| `caller` | `string` | Invoking component identifier |
+| Name     | Type     | Description                    |
+| -------- | -------- | ------------------------------ |
+| `path`   | `string` | Absolute path to the directory |
+| `caller` | `string` | Invoking component identifier  |
 
 **Returns**: `string[]` — list of entry names (filenames, not full paths). Individual unreadable entries are skipped with an ERROR log; the overall listing does not fail for one bad inode.
 
@@ -145,9 +150,9 @@ const text = new TextDecoder().decode(bytes);
 
 **Parameters**:
 
-| Name | Type | Description |
-|---|---|---|
-| `path` | `string` | Absolute path to check |
+| Name     | Type     | Description                   |
+| -------- | -------- | ----------------------------- |
+| `path`   | `string` | Absolute path to check        |
 | `caller` | `string` | Invoking component identifier |
 
 **Returns**: `boolean` — `true` if path exists; `false` if it does not.
@@ -180,6 +185,7 @@ Source: `sidecar/src/index.ts:141`.
 **Request**: `GET http://127.0.0.1:{port}/health`
 
 **Response** (HTTP 200):
+
 ```json
 { "status": "ok", "pid": 12345 }
 ```
@@ -196,13 +202,13 @@ All routes other than `/health` return HTTP 404 in Sprint 1. Future epics will e
 
 These are documented here as forward declarations visible in the codebase comments. They are not callable in Sprint 1.
 
-| Command | Source reference | Target epic |
-|---|---|---|
-| `read_dir_recursive`, `watch_path`, `stop_watch` | `src-tauri/src/ipc.rs:157` | Epic 03 (FS indexer) |
-| `run_evaluator`, `get_evaluator_result` | `src-tauri/src/ipc.rs:158` | Epic 05 (Skill Safety Evaluator) |
-| `spawn_task`, `stream_task_events`, `cancel_task` | `src-tauri/src/ipc.rs:159` | Epic 07 (Task runner) |
-| `read_hooks`, `write_hook`, `delete_hook` | `src-tauri/src/ipc.rs:160` | Epic 09 (Hook management) |
+| Command                                           | Source reference           | Target epic                      |
+| ------------------------------------------------- | -------------------------- | -------------------------------- |
+| `read_dir_recursive`, `watch_path`, `stop_watch`  | `src-tauri/src/ipc.rs:157` | Epic 03 (FS indexer)             |
+| `run_evaluator`, `get_evaluator_result`           | `src-tauri/src/ipc.rs:158` | Epic 05 (Skill Safety Evaluator) |
+| `spawn_task`, `stream_task_events`, `cancel_task` | `src-tauri/src/ipc.rs:159` | Epic 07 (Task runner)            |
+| `read_hooks`, `write_hook`, `delete_hook`         | `src-tauri/src/ipc.rs:160` | Epic 09 (Hook management)        |
 
 ---
 
-*Last reviewed: 2026-05-09 by tech-writer agent against Sprint 1.*
+_Last reviewed: 2026-05-09 by tech-writer agent against Sprint 1._

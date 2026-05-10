@@ -14,13 +14,13 @@ A ZoePlane plugin is a signed `.zoeplugin` archive with a `manifest.json` at its
 
 Available extension points (`PluginExtensionPoints`):
 
-| Extension | Interface | Description |
-|---|---|---|
-| `navigation` | `NavigationExtension` | Contribute a nav item to ZoePlane's sidebar (primary, secondary, or bottom position) |
-| `view` | `ViewExtension` | Contribute a full-screen view linked to a declared nav item |
-| `runStreamObserver` | `RunStreamObserverExtension` | Subscribe to the active task's run stream (read-only) |
-| `resourceEnricher` | `ResourceEnricherExtension` | Enrich skill/agent/command/team/workflow/hook detail views with additional panels |
-| `settingsPanel` | `SettingsPanelExtension` | Contribute a settings panel under Settings → [Plugin Name] |
+| Extension           | Interface                    | Description                                                                          |
+| ------------------- | ---------------------------- | ------------------------------------------------------------------------------------ |
+| `navigation`        | `NavigationExtension`        | Contribute a nav item to ZoePlane's sidebar (primary, secondary, or bottom position) |
+| `view`              | `ViewExtension`              | Contribute a full-screen view linked to a declared nav item                          |
+| `runStreamObserver` | `RunStreamObserverExtension` | Subscribe to the active task's run stream (read-only)                                |
+| `resourceEnricher`  | `ResourceEnricherExtension`  | Enrich skill/agent/command/team/workflow/hook detail views with additional panels    |
+| `settingsPanel`     | `SettingsPanelExtension`     | Contribute a settings panel under Settings → [Plugin Name]                           |
 
 All extension types are `@experimental`.
 
@@ -59,13 +59,13 @@ The root manifest type. Bundle as `manifest.json` at the root of a `.zoeplugin` 
 
 ```typescript
 interface PluginManifest {
-  id: string;              // Reverse-DNS: e.g., "com.example.my-plugin"
+  id: string; // Reverse-DNS: e.g., "com.example.my-plugin"
   name: string;
-  version: string;         // semver
+  version: string; // semver
   description: string;
   author: string;
-  license: string;         // SPDX expression
-  minHostVersion: string;  // minimum ZoePlane version required (semver)
+  license: string; // SPDX expression
+  minHostVersion: string; // minimum ZoePlane version required (semver)
   capabilities: PluginCapabilities;
   extensions: PluginExtensionPoints;
 }
@@ -77,10 +77,10 @@ Declared capabilities gate what the plugin host runtime permits. Undeclared capa
 
 ```typescript
 interface PluginCapabilities {
-  readAssetIndex?: boolean;    // Read skill/agent/team metadata from host index
-  observeRunStream?: boolean;  // Subscribe to run stream events (read-only)
-  pluginStorage?: boolean;     // Store data in plugin's own scoped storage
-  openUrl?: boolean;           // Open OS URLs from settings panels
+  readAssetIndex?: boolean; // Read skill/agent/team metadata from host index
+  observeRunStream?: boolean; // Subscribe to run stream events (read-only)
+  pluginStorage?: boolean; // Store data in plugin's own scoped storage
+  openUrl?: boolean; // Open OS URLs from settings panels
 }
 ```
 
@@ -102,7 +102,7 @@ interface PluginExtensionPoints {
 interface NavigationExtension {
   id: string;
   label: string;
-  icon: string;                              // SVG string or named icon from host icon set
+  icon: string; // SVG string or named icon from host icon set
   position: "primary" | "secondary" | "bottom";
 }
 ```
@@ -111,8 +111,8 @@ interface NavigationExtension {
 
 ```typescript
 interface ViewExtension {
-  navigationId: string;  // Must match a declared NavigationExtension.id
-  component: string;     // URL of the plugin iframe entry point
+  navigationId: string; // Must match a declared NavigationExtension.id
+  component: string; // URL of the plugin iframe entry point
 }
 ```
 
@@ -122,7 +122,7 @@ Plugins receive read-only copies of structured run events. Plugins cannot write 
 
 ```typescript
 interface RunStreamObserverExtension {
-  onEvent?: string;  // Name of the plugin's exported handler function
+  onEvent?: string; // Name of the plugin's exported handler function
 }
 ```
 
@@ -131,7 +131,7 @@ interface RunStreamObserverExtension {
 ```typescript
 interface ResourceEnricherExtension {
   resourceKind: ("skill" | "agent" | "command" | "team" | "workflow" | "hook")[];
-  component: string;  // URL of the enricher panel iframe
+  component: string; // URL of the enricher panel iframe
 }
 ```
 
@@ -139,7 +139,7 @@ interface ResourceEnricherExtension {
 
 ```typescript
 interface SettingsPanelExtension {
-  component: string;  // URL of the settings panel iframe
+  component: string; // URL of the settings panel iframe
 }
 ```
 
@@ -150,16 +150,12 @@ Injected into plugin iframes by the host runtime at initialization as `window.__
 ```typescript
 interface ZoePlaneHostBridge {
   readonly theme: "light" | "dark";
-  readonly capabilities: PluginCapabilities;    // Plugin's declared capabilities
+  readonly capabilities: PluginCapabilities; // Plugin's declared capabilities
   on(event: HostEventType, handler: (data: unknown) => void): () => void;
   call(method: string, args?: unknown): Promise<unknown>;
 }
 
-type HostEventType =
-  | "THEME_CHANGE"
-  | "ROUTE_CHANGE"
-  | "RUN_EVENT"
-  | "ASSET_INDEX_CHANGE";
+type HostEventType = "THEME_CHANGE" | "ROUTE_CHANGE" | "RUN_EVENT" | "ASSET_INDEX_CHANGE";
 ```
 
 `on()` returns an unsubscribe function. Call it to stop receiving events.
@@ -189,4 +185,4 @@ TBD: `@zoeplane/plugin-sdk@0.0.1` is not yet published to npm. The `@zoeplane` n
 
 ---
 
-*Last reviewed: 2026-05-09 by tech-writer agent against Sprint 1.*
+_Last reviewed: 2026-05-09 by tech-writer agent against Sprint 1._

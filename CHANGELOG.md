@@ -45,4 +45,4 @@ Sprint 1 established the foundational monorepo scaffold, the Tauri shell and sid
 
 ---
 
-*Last reviewed: 2026-05-09 by tech-writer agent against Sprint 1.*
+_Last reviewed: 2026-05-09 by tech-writer agent against Sprint 1._

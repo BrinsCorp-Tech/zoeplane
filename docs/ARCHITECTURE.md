@@ -83,6 +83,7 @@ React UI
 See `docs/DATA-MODEL.md` for the SQLite schema and migration philosophy.
 
 The source-of-truth split is:
+
 - **`~/.claude/`** — authoritative for all skill, agent, team, workflow, hook, and session data. ZoePlane reads this directory; it does not own it.
 - **SQLite** (path: `<appDataDir>/zoeplane.db`) — derived indexes, preferences, and evaluator results. Can be deleted and rebuilt from `~/.claude/` content.
 
@@ -117,4 +118,4 @@ See `docs/architecture/decisions/README.md` for the full ADR index.
 
 ---
 
-*Last reviewed: 2026-05-09 by tech-writer agent against Sprint 1.*
+_Last reviewed: 2026-05-09 by tech-writer agent against Sprint 1._
