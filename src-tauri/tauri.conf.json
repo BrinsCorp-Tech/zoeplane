@@ -10,6 +10,7 @@
     "beforeBuildCommand": "bun run build"
   },
   "app": {
+    "withGlobalTauri": true,
     "windows": [
       {
         "label": "main",
@@ -46,36 +47,11 @@
   },
   "plugins": {
     "shell": {
-      "all": false,
-      "open": true,
-      "scope": [
-        {
-          "name": "zoeplane-sidecar",
-          "cmd": "zoeplane-sidecar",
-          "args": true,
-          "sidecar": true
-        }
-      ]
+      "open": false
     },
     "deep-link": {
       "desktop": {
         "schemes": ["zoeplane"]
-      }
-    },
-    "fs": {
-      "all": false,
-      "readFile": true,
-      "writeFile": true,
-      "readDir": true,
-      "copyFile": false,
-      "createDir": true,
-      "removeDir": false,
-      "removeFile": false,
-      "renameFile": true,
-      "exists": true,
-      "scope": {
-        "allow": ["$HOME/.claude/**", "$APPDATA/com.brinscorp.zoeplane/**", "$APP/**"],
-        "deny": []
       }
     }
   }

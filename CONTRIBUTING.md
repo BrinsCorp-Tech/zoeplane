@@ -20,12 +20,12 @@ close issues or pull requests that are off-topic or violate these norms.
 
 Before contributing code, ensure the following tools are installed:
 
-| Tool         | Minimum Version       | Install                                  |
-| ------------ | --------------------- | ---------------------------------------- |
-| Bun          | 1.1.0                 | https://bun.sh                           |
-| Node.js      | 20.0.0                | https://nodejs.org                       |
-| Rust + Cargo | stable (edition 2021) | https://rustup.rs                        |
-| Tauri CLI    | 2.x                   | `cargo install tauri-cli --version "^2"` |
+| Tool         | Minimum Version       | Install                                           |
+| ------------ | --------------------- | ------------------------------------------------- |
+| Bun          | 1.1.0                 | https://bun.sh                                    |
+| Node.js      | 20.0.0                | https://nodejs.org                                |
+| Rust + Cargo | stable (edition 2021) | https://rustup.rs                                 |
+| Tauri CLI    | 2.x                   | `cargo install tauri-cli --version "^2" --locked` |
 
 **Rust is required** even for front-end-only changes because the pre-commit hook
 runs `cargo fmt --check` over `src-tauri/`. If you do not have Rust installed,
@@ -53,6 +53,56 @@ bun run dev
 # Start with the full Tauri shell (requires Rust toolchain)
 bun run tauri
 ```
+
+## Clean-state smoke testing
+
+Before verifying any change that touches `src-tauri/tauri.conf.json`,
+`src-tauri/capabilities/`, or `src-tauri/src/lib.rs::spawn_sidecar`, wipe all
+ZoePlane platform state first. A test that requires manual environment fixes
+isn't testing the app — it's testing the fix.
+
+Run the clean-state script from the repo root:
+
+```bash
+bash scripts/clean-state.sh
+```
+
+Then boot the full Tauri shell:
+
+```bash
+bun run tauri
+```
+
+On first boot after a wipe, the `sidecar-lifecycle` tracing log will show the
+AppData directory being created before the sidecar spawns. On subsequent boots
+the same log line fires with no directory creation (idempotent).
+
+### What the script wipes (macOS)
+
+The script removes (or reports as absent — no error either way) the four macOS
+platform-state locations bound to the ZoePlane bundle identifier
+`com.brinscorp.zoeplane`:
+
+| Path                                                                  | Contents                       |
+| --------------------------------------------------------------------- | ------------------------------ |
+| `~/Library/Application Support/com.brinscorp.zoeplane`                | SQLite database, derived state |
+| `~/Library/Preferences/com.brinscorp.zoeplane.plist`                  | macOS preference domain        |
+| `~/Library/Caches/com.brinscorp.zoeplane`                             | WebKit cache                   |
+| `~/Library/Saved Application State/com.brinscorp.zoeplane.savedState` | Window restore state           |
+
+Use `--dry-run` to preview what would be removed without touching any files:
+
+```bash
+bash scripts/clean-state.sh --dry-run
+```
+
+### Linux / Windows clean-state
+
+Linux and Windows wipe paths are a Sprint 2 carryover. On those platforms the
+script detects the OS via `uname`, prints a clear message, and exits cleanly
+without error. If you are developing on Linux or Windows, wipe the
+XDG/AppData equivalents manually (run `cargo tauri info` to find the exact
+paths for your platform and bundle identifier).
 
 ## Branch Convention
 

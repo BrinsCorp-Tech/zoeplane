@@ -57,7 +57,15 @@ Download the appropriate artifact from the GitHub Releases page at `github.com/B
 
 ### Build from source
 
-Requirements: Bun ≥ 1.1.0, Rust stable toolchain, Tauri CLI v2.
+Requirements: Bun ≥ 1.1.0, Rust stable toolchain (install via https://rustup.rs), Tauri CLI v2.
+
+Install the Tauri CLI before building:
+
+```bash
+cargo install tauri-cli --version "^2" --locked
+```
+
+Then clone and build:
 
 ```bash
 git clone https://github.com/BrinsCorp-Tech/zoeplane.git
