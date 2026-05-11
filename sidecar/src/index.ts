@@ -1,7 +1,7 @@
 // ZoePlane Sidecar — Entry point
 //
-// The sidecar is a Node.js (bun-compatible) process that the Tauri shell spawns
-// at startup via the `externalBin` mechanism declared in tauri.conf.json.
+// The sidecar is a bun-compiled single-binary process that the Tauri shell
+// spawns at startup via the `externalBin` mechanism declared in tauri.conf.json.
 //
 // Architecture role:
 //   - Hosts Path A (Direct Claude SDK calls) — see path-a/
@@ -11,47 +11,153 @@
 //   - FS watchers + asset indexer — see indexer/
 //   - SQLite derived-state (no content, only indexes + preferences) — see db/
 //
-// IPC contract: the sidecar communicates with the Tauri shell via stdout/stdin
-// JSON-RPC or a local Unix socket (TBD in Epic 01). The React UI never speaks
-// to the sidecar directly — all calls route through Tauri IPC commands (src-tauri/ipc.rs).
+// IPC contract (Sprint 1 decision, 2026-05-07):
+//   HTTP loopback on 127.0.0.1:0 (kernel-assigned ephemeral port).
+//   Bound port is written to stdout as a single-line JSON: {"port": N}
+//   so the Tauri shell can parse it and store the port in app state.
+//   The React UI never speaks to the sidecar directly — all calls route
+//   through Tauri IPC commands (src-tauri/ipc.rs).
 //
 // Build: `bun build src/index.ts --compile --outfile dist/zoeplane-sidecar`
 // Produces a single-binary executable for the target platform.
-//
-// TODO (Epic 01, Sprint 1): implement the IPC server. Options:
-//   - stdout/stdin JSON-RPC (simplest; used by many Tauri sidecars)
-//   - Unix domain socket / Windows named pipe (better for high-frequency streaming)
-//   Decision should be logged in Epic 01 risks when implemented.
 
 import { version } from "../package.json";
+import { join } from "node:path";
+import { openDatabase } from "./db/client";
+import { runMigrations } from "./db/runner";
+import { log } from "./log";
 
-console.error(
-  JSON.stringify({
-    level: "INFO",
-    message: "ZoePlane sidecar starting",
-    version,
-    pid: process.pid,
-  })
-);
+// ---------------------------------------------------------------------------
+// CLI argument parsing — DB path (required, supplied by Tauri shell at spawn)
+// ---------------------------------------------------------------------------
+// The Tauri shell resolves appDataDir() in Rust and passes the database path
+// as --db-path <absolute-path>.  We never derive this path in TypeScript to
+// avoid platform-specific drift with Tauri's own resolver.
+//
+// If --db-path is missing the sidecar fails loudly (AC4) rather than silently
+// falling back to a hardcoded location.
 
-// TODO (Epic 01): start IPC server and register handlers
-// import { startIpcServer } from "./ipc/server";
-// await startIpcServer();
+function parseDbPath(): string {
+  const args = process.argv.slice(2);
+  const idx = args.indexOf("--db-path");
+  if (idx === -1 || args[idx + 1] === undefined) {
+    log(
+      "ERROR",
+      "Sidecar startup failed: required argument --db-path not provided. " +
+        "The Tauri shell must resolve appDataDir() and pass it as --db-path <path>."
+    );
+    process.exit(1);
+  }
+  return args[idx + 1];
+}
 
-// TODO (Epic 03): start FS watcher and asset indexer
-// import { startIndexer } from "./indexer";
-// await startIndexer();
+// ---------------------------------------------------------------------------
+// Resolve the migrations directory.
+//
+// The --migrations-dir argument is supplied by the Tauri shell at spawn time,
+// pointing to the resource-bundled migrations directory copied by tauri.conf.json
+// `resources` entry.  This is the same approach as --db-path: Rust resolves the
+// correct absolute path and passes it in, keeping the sidecar platform-agnostic.
+//
+// If --migrations-dir is not supplied the runner falls back to a sibling
+// `migrations/` directory relative to the sidecar binary (dev-mode convenience)
+// and emits a WARN so the omission is visible.
+// ---------------------------------------------------------------------------
 
-// Prevent process from exiting — real implementation drives the event loop
-// via the IPC server. Remove this stub when the server is implemented.
-process.stdin.resume();
+interface MigrationsDirResult {
+  path: string;
+  isFallback: boolean;
+}
+
+function parseMigrationsDir(): MigrationsDirResult {
+  const args = process.argv.slice(2);
+  const idx = args.indexOf("--migrations-dir");
+  if (idx !== -1 && args[idx + 1] !== undefined) {
+    return { path: args[idx + 1], isFallback: false };
+  }
+  // Fallback: resolve relative to this module's directory (dev / source-mode only).
+  // import.meta.dir is Bun's equivalent of __dirname and works in both source
+  // and compiled-binary modes.
+  const fallback = join(import.meta.dir, "db", "migrations");
+  log(
+    "WARN",
+    "Sidecar: --migrations-dir not supplied; falling back to dev-mode path. " +
+      "Production builds must supply this argument.",
+    { fallback }
+  );
+  return { path: fallback, isFallback: true };
+}
+
+// Log startup to stderr (structured JSON for the lifecycle log channel).
+// Tauri wires sidecar stderr to tracing so this surfaces in RUST_LOG output.
+log("INFO", "ZoePlane sidecar starting", { version });
+
+// ---------------------------------------------------------------------------
+// Database initialisation — MUST complete before the HTTP server starts.
+// IPC handlers depend on the DB being ready (Story 1.3 contract).
+// ---------------------------------------------------------------------------
+
+const dbPath = parseDbPath();
+
+log("INFO", "Opening SQLite database", { dbPath });
+
+const db = openDatabase(dbPath);
+const migrationsDir = parseMigrationsDir();
+runMigrations(db, migrationsDir.path, migrationsDir.isFallback);
+
+log("INFO", "Database ready", { dbPath });
+
+// ---------------------------------------------------------------------------
+// HTTP loopback server (Sprint 1 IPC transport — operator decision 2026-05-07)
+// ---------------------------------------------------------------------------
+// Bind to port 0 so the kernel assigns a free ephemeral port. This avoids
+// port conflicts when multiple dev instances run simultaneously or when the
+// previous instance's port lingers in TIME_WAIT.
+
+const server = Bun.serve({
+  hostname: "127.0.0.1",
+  port: 0, // kernel-assigned ephemeral port
+  fetch(req: Request): Response {
+    const url = new URL(req.url);
+
+    if (url.pathname === "/health" && req.method === "GET") {
+      return Response.json(
+        { status: "ok", pid: process.pid },
+        { status: 200 }
+      );
+    }
+
+    // All other routes: 404. Future epics will extend this routing.
+    return new Response("Not Found", { status: 404 });
+  },
+});
+
+// Announce the bound port to stdout as a single-line JSON object.
+// The Tauri shell reads this line at startup and stores the port in app state
+// before issuing health-check IPC requests.
+// IMPORTANT: write to stdout (process.stdout.write), not console.log — in
+// some runtime environments console.log appends to stderr; stdout is the
+// Tauri-monitored channel for this announcement.
+process.stdout.write(JSON.stringify({ port: server.port }) + "\n");
+
+log("INFO", "ZoePlane sidecar HTTP server ready", { hostname: "127.0.0.1", port: server.port });
+
+// ---------------------------------------------------------------------------
+// Signal handlers — clean shutdown
+// ---------------------------------------------------------------------------
 
 process.on("SIGTERM", () => {
-  console.error(JSON.stringify({ level: "INFO", message: "Sidecar SIGTERM — shutting down" }));
+  log("INFO", "Sidecar SIGTERM — shutting down");
+  server.stop(true);
   process.exit(0);
 });
 
 process.on("SIGINT", () => {
-  console.error(JSON.stringify({ level: "INFO", message: "Sidecar SIGINT — shutting down" }));
+  log("INFO", "Sidecar SIGINT — shutting down");
+  server.stop(true);
   process.exit(0);
 });
+
+// TODO (Epic 03): start FS watcher and asset indexer
+// import { startIndexer } from "./indexer";
+// await startIndexer();

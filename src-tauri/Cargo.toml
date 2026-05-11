@@ -25,11 +25,12 @@ tauri-plugin-fs = "2"
 tauri-plugin-dialog = "2"
 tauri-plugin-notification = "2"
 tauri-plugin-process = "2"
+tauri-plugin-deep-link = "2"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
-tokio = { version = "1", features = ["full"] }
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
 
 [profile.release]
 # Optimize for binary size for distribution builds.
@@ -39,6 +40,11 @@ lto = true
 codegen-units = 1
 panic = "abort"
 strip = true
+
+[dev-dependencies]
+tauri = { version = "2", features = ["test"] }
+tracing-test = { version = "0.2", features = ["no-env-filter"] }
+tempfile = "3"
 
 [profile.dev]
 # Fast incremental compilation in dev; no size optimization.

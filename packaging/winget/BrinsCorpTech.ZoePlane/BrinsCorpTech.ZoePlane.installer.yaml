@@ -1,0 +1,40 @@
+# Winget installer manifest — BrinsCorpTech.ZoePlane
+#
+# STATIC STUB — not yet submitted to microsoft/winget-pkgs.
+# Submission is post-Sprint-1.
+#
+# OPERATOR ACTION REQUIRED (at each release):
+#   1. Update PackageVersion to match the release tag (without the "v" prefix).
+#   2. Update InstallerUrl to point to the correct GitHub Release artifact.
+#      Tauri 2 Windows builds produce:
+#        NSIS installer: ZoePlane_<version>_x64-setup.exe
+#        MSI installer:  ZoePlane_<version>_x64_en-US.msi
+#      Use whichever format the winget-pkgs contribution guide recommends
+#      (NSIS is preferred for most packages as of 2026).
+#   3. Replace InstallerSha256 with the actual SHA256 of the installer:
+#        CertUtil -hashfile ZoePlane_<version>_x64-setup.exe SHA256  (Windows)
+#        shasum -a 256 ZoePlane_<version>_x64-setup.exe              (macOS/Linux)
+#   4. Submit via PR to https://github.com/microsoft/winget-pkgs.
+#
+# Schema: https://aka.ms/winget-manifest.installer.1.9.0.schema.json
+
+PackageIdentifier: BrinsCorpTech.ZoePlane
+PackageVersion: "0.0.0"
+Platform:
+  - Windows.Desktop
+MinimumOSVersion: "10.0.17763.0"
+InstallModes:
+  - interactive
+  - silent
+Installers:
+  - Architecture: x64
+    InstallerType: nullsoft
+    # REPLACE_BEFORE_PUBLISH_WITH_RELEASE_ARTIFACT_SHA256
+    # Run: CertUtil -hashfile <installer.exe> SHA256  (or shasum -a 256 on macOS/Linux)
+    InstallerUrl: "https://github.com/BrinsCorp-Tech/zoeplane/releases/download/v0.0.0/ZoePlane_0.0.0_x64-setup.exe"
+    InstallerSha256: "REPLACE_BEFORE_PUBLISH_WITH_RELEASE_ARTIFACT_SHA256"
+    InstallerSwitches:
+      Silent: "/S"
+      SilentWithProgress: "/S"
+ManifestType: installer
+ManifestVersion: 1.9.0

@@ -1,15 +1,29 @@
 name: CI
 
+# Runs on every pull request into main or develop.  All four job types (lint,
+# typecheck, test, build) run across all three target platforms in parallel.
+# fail-fast: false ensures a failure on one platform does not cancel the others —
+# operators need to see which platforms are red.
+#
+# Branch protection on main should require all matrix legs as required status checks.
+# This is a repo-settings action, not a workflow change.  See PR description for the
+# exact check names to register.
+
 on:
   pull_request:
-    branches: [main]
-  push:
-    branches: [main]
+    branches: [main, develop]
 
 jobs:
-  lint-typecheck-test:
-    name: Lint + Typecheck + Unit Tests
-    runs-on: ubuntu-latest
+  # ──────────────────────────────────────────────────────────────────────────────
+  # lint: ESLint flat config across all workspaces
+  # ──────────────────────────────────────────────────────────────────────────────
+  lint:
+    name: Lint (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-latest, windows-latest, ubuntu-22.04]
 
     steps:
       - name: Checkout
@@ -26,13 +40,206 @@ jobs:
       - name: Lint (ESLint)
         run: bun run lint
 
+  # ──────────────────────────────────────────────────────────────────────────────
+  # typecheck: tsc --noEmit across all workspaces
+  # ──────────────────────────────────────────────────────────────────────────────
+  typecheck:
+    name: Typecheck (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-latest, windows-latest, ubuntu-22.04]
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v1
+        with:
+          bun-version: latest
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
       - name: Typecheck (tsc --noEmit)
         run: bun run typecheck
+
+  # ──────────────────────────────────────────────────────────────────────────────
+  # test: Vitest unit tests across all platforms
+  # ──────────────────────────────────────────────────────────────────────────────
+  test:
+    name: Unit Tests (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-latest, windows-latest, ubuntu-22.04]
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v1
+        with:
+          bun-version: latest
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
 
       - name: Unit tests (Vitest)
         run: bun run test
 
       - name: Check tokens completeness
-        # Every semantic token in :root[data-theme="light"] must also exist in :root[data-theme="dark"].
-        # The script lives in packages/design-tokens; implemented in Sprint 1 per dark-mode-architecture.md.
-        run: bun run --cwd packages/design-tokens check-tokens || echo "TODO: token-completeness check not yet implemented — add in Sprint 1"
+        # Every semantic token in :root[data-theme="light"] must also exist in
+        # :root[data-theme="dark"].  The script lives in packages/design-tokens.
+        run: |
+          bun run --cwd packages/design-tokens check-tokens || echo "TODO: token-completeness check not yet implemented — add in Sprint 1"
+
+  # ──────────────────────────────────────────────────────────────────────────────
+  # scaffold-health: fast pre-flight checks that are platform-invariant.
+  # Runs on ubuntu only (these checks have no platform-specific logic).
+  # Failures here mean the repo is in a broken state before Rust even compiles.
+  # ──────────────────────────────────────────────────────────────────────────────
+  scaffold-health:
+    name: Scaffold Health
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Verify Tauri icons present
+        run: |
+          missing=0
+          for f in 32x32.png 128x128.png 128x128@2x.png icon.icns icon.ico; do
+            if [ ! -f "src-tauri/icons/$f" ]; then
+              echo "::error file=src-tauri/icons/$f::missing icon (declared in tauri.conf.json bundle.icon)"
+              missing=1
+            fi
+          done
+          exit $missing
+      - name: Verify icon master present
+        run: test -f src-tauri/icons/icon-master.png || { echo "::error::icon-master.png missing — required for icon regeneration"; exit 1; }
+      - name: Verify sidecar entry exists
+        run: test -f sidecar/src/index.ts
+      - name: Verify migrations directory non-empty
+        run: ls sidecar/src/db/migrations/*.sql > /dev/null
+
+  # ──────────────────────────────────────────────────────────────────────────────
+  # actionlint: lint GitHub Actions workflow YAML for correctness.
+  # Standalone job — no matrix needed; platform-invariant.
+  # ──────────────────────────────────────────────────────────────────────────────
+  actionlint:
+    name: Workflow Lint (actionlint)
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: reviewdog/action-actionlint@v1
+        with:
+          reporter: github-pr-check
+          fail_level: error
+
+  # ──────────────────────────────────────────────────────────────────────────────
+  # build: unsigned Tauri platform builds
+  # A failure here indicates a platform-specific compilation issue, not a code
+  # quality failure.  Step names are explicit to distinguish infra failures from
+  # code-level failures in the run log.
+  # ──────────────────────────────────────────────────────────────────────────────
+  build:
+    name: Build (${{ matrix.os }})
+    needs: [lint, typecheck, test, scaffold-health]
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-latest, windows-latest, ubuntu-22.04]
+        include:
+          - os: macos-latest
+            bundles: app
+          - os: windows-latest
+            bundles: msi,nsis
+          - os: ubuntu-22.04
+            bundles: deb,rpm
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v1
+        with:
+          bun-version: latest
+
+      - name: Install Linux system dependencies
+        if: matrix.os == 'ubuntu-22.04'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libwebkit2gtk-4.1-dev \
+            libappindicator3-dev \
+            librsvg2-dev \
+            patchelf
+
+      - name: Setup Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Rust cache
+        uses: swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+
+      - name: Install frontend dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Build UI
+        run: bun run --cwd src build
+
+      - name: Build sidecar (bun single-binary)
+        # Produces sidecar/dist/zoeplane-sidecar — bundled for the target platform.
+        # The binary is embedded by Tauri via the `externalBin` config in tauri.conf.json.
+        run: bun run --cwd sidecar build
+
+      - name: Tauri build (unsigned)
+        # Unsigned builds only — signed releases are handled by release.yml (Story 1.5).
+        # --bundles overrides tauri.conf.json bundle.targets for this invocation only,
+        # excluding dmg (macOS) and appimage (Linux) which are flaky on GHA runners.
+        # Signed release.yml reads bundle.targets in full and produces all 7 formats.
+        uses: tauri-apps/tauri-action@v0
+        with:
+          args: --bundles ${{ matrix.bundles }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Upload Tauri artifacts
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: tauri-artifacts-${{ matrix.os }}
+          path: src-tauri/target/release/bundle/
+          if-no-files-found: ignore
+          retention-days: 7
+
+  # ──────────────────────────────────────────────────────────────────────────────
+  # summary: publish a results table to the GitHub Actions step summary.
+  # Runs after all jobs regardless of outcome (if: always()).
+  # ──────────────────────────────────────────────────────────────────────────────
+  summary:
+    name: Summary
+    runs-on: ubuntu-22.04
+    needs: [lint, typecheck, test, scaffold-health, actionlint, build]
+    if: always()
+    steps:
+      - name: Publish results table
+        run: |
+          {
+            echo "# CI Matrix Results"
+            echo ""
+            echo "| Job | Status |"
+            echo "|-----|--------|"
+            echo "| Lint | ${{ needs.lint.result }} |"
+            echo "| Typecheck | ${{ needs.typecheck.result }} |"
+            echo "| Unit Tests | ${{ needs.test.result }} |"
+            echo "| Scaffold Health | ${{ needs.scaffold-health.result }} |"
+            echo "| Workflow Lint (actionlint) | ${{ needs.actionlint.result }} |"
+            echo "| Build | ${{ needs.build.result }} |"
+          } >> "$GITHUB_STEP_SUMMARY"

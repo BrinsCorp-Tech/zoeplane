@@ -15,6 +15,14 @@ src-tauri/target/
 # ---- Tauri bundle artifacts ----
 src-tauri/gen/
 
+# ---- Generated sidecar binaries (produced by copy-sidecar.ts postbuild) ----
+# Glob keeps src-tauri/binaries/ directory tracked (for future .gitkeep) but
+# excludes the platform-stamped binary blobs that copy-sidecar.ts writes.
+src-tauri/binaries/zoeplane-sidecar-*
+
+# ---- Bun build cache files ----
+**/.*.bun-build
+
 # ---- OS / Editor ----
 .DS_Store
 .DS_Store?
@@ -59,20 +67,32 @@ storybook-static/
 coverage/
 .nyc_output/
 
-# ---- Bun lockfile — commit bun.lockb, not this ----
-# bun.lockb is committed; exclude older lock formats
+# ---- Lockfile hygiene ----
+# bun.lock (text format, bun >= 1.2) is the committed lockfile — do not ignore it.
+# Older binary bun.lockb is not produced by current Bun versions.
+# Exclude competing lock formats so only bun.lock lands in the repo.
 package-lock.json
 pnpm-lock.yaml
 yarn.lock
 
 # ---- Private strategic docs (not for OSS public repo) ----
 # Strategic planning, requirements, design specs, and internal handoffs
-# stay local. The OSS repo ships code + LICENSE + README + CLAUDE.md only.
-docs/architecture/
+# stay local. The OSS repo ships code + LICENSE + README + CONTRIBUTING +
+# the public docs/ founding documents (ARCHITECTURE.md, INSTALL.md,
+# SECURITY.md, etc.) plus accepted ADRs under docs/architecture/decisions/.
+#
+# `docs/architecture/` uses a wildcard exclude + exemption pattern because
+# git refuses to descend into a fully-excluded directory (an `!` re-include
+# cannot rescue files whose parent directory was excluded outright).
+docs/architecture/*
+!docs/architecture/decisions/
+!docs/architecture/decisions/**
 docs/design/
 docs/discovery/
 docs/epics/
+docs/features/
 docs/handoffs/
+docs/stories/
 
 # ---- Local working files (not for OSS public repo) ----
 whats-next.md

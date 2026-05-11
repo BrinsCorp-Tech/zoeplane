@@ -1,10 +1,20 @@
 name: Release
 
-# STUB — Code signing keys are NOT committed and are deferred until the first release.
-# When signing is ready:
-#   macOS: APPLE_CERTIFICATE, APPLE_CERTIFICATE_PASSWORD, APPLE_SIGNING_IDENTITY, APPLE_ID, APPLE_PASSWORD, APPLE_TEAM_ID
-#   Windows: TAURI_SIGNING_PRIVATE_KEY, TAURI_SIGNING_PRIVATE_KEY_PASSWORD (or Windows Authenticode cert)
-# See: https://tauri.app/distribute/sign/
+# Triggered by semver tags (e.g. v1.2.3).
+# Produces signed, distributable artifacts for all three platforms and attaches
+# them to a GitHub Release draft.  Signing secrets must be configured in the
+# repository's GitHub Actions secrets before a real signed run is possible —
+# see "Operator action required" in the PR description / README.
+#
+# Platform overview:
+#   macOS   → universal-apple-darwin binary, codesigned + notarized (.app + .dmg)
+#   Windows → Authenticode-signed installer (.exe / .msi)
+#   Linux   → GPG-signed packages (.deb, .rpm, .AppImage)
+#
+# Note: TAURI_SIGNING_PRIVATE_KEY / TAURI_SIGNING_PRIVATE_KEY_PASSWORD are for
+# Tauri's UPDATE-BUNDLE signing (Ed25519, used by the in-app auto-updater).
+# That is a separate Sprint-N concern and is NOT wired here.  See the Tauri
+# updater docs when auto-update lands.
 
 on:
   push:
@@ -12,22 +22,39 @@ on:
       - "v[0-9]+.[0-9]+.[0-9]+"
 
 jobs:
-  release:
-    name: Release (${{ matrix.platform }})
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - platform: macos-latest
-            args: --target universal-apple-darwin
-          - platform: windows-latest
-            args: ""
-          - platform: ubuntu-22.04
-            args: ""
-
-    runs-on: ${{ matrix.platform }}
+  # ────────────────────────────────────────────────────────────────────────────
+  # macOS — universal binary (Apple Silicon + Intel), codesigned + notarized
+  # ────────────────────────────────────────────────────────────────────────────
+  release-macos:
+    name: Release (macOS universal)
+    runs-on: macos-latest
 
     steps:
+      - name: Verify macOS signing secrets are present
+        # Fail loudly before spending any build time if secrets are absent.
+        # Configure these secrets in the repository settings before the first
+        # signed release.  See README.md for provisioning instructions.
+        env:
+          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: |
+          missing=0
+          for var in APPLE_CERTIFICATE APPLE_CERTIFICATE_PASSWORD APPLE_SIGNING_IDENTITY APPLE_ID APPLE_PASSWORD APPLE_TEAM_ID; do
+            if [ -z "${!var}" ]; then
+              echo "::error::Required secret '$var' is not configured. Add it to the repository's GitHub Actions secrets. See README.md signing setup."
+              missing=1
+            fi
+          done
+          if [ "$missing" -eq 1 ]; then
+            echo "::error::One or more required macOS signing secrets are missing. Aborting to prevent publishing an unsigned artifact."
+            exit 1
+          fi
+          echo "All macOS signing secrets present."
+
       - name: Checkout
         uses: actions/checkout@v4
 
@@ -36,25 +63,24 @@ jobs:
         with:
           bun-version: latest
 
-      - name: Install Linux system dependencies
-        if: matrix.platform == 'ubuntu-22.04'
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y \
-            libwebkit2gtk-4.1-dev \
-            libappindicator3-dev \
-            librsvg2-dev \
-            patchelf
-
-      - name: Setup Rust toolchain
+      - name: Setup Rust toolchain (universal targets)
         uses: dtolnay/rust-toolchain@stable
         with:
-          targets: ${{ matrix.platform == 'macos-latest' && 'aarch64-apple-darwin,x86_64-apple-darwin' || '' }}
+          targets: aarch64-apple-darwin,x86_64-apple-darwin
 
       - name: Rust cache
         uses: swatinem/rust-cache@v2
         with:
           workspaces: src-tauri
+
+      # Import the .p12 certificate into a temporary keychain so codesign(1)
+      # can find it.  Uses the well-maintained apple-actions/import-codesign-certs
+      # action which handles keychain creation, import, and partition-list setup.
+      - name: Import macOS signing certificate into keychain
+        uses: apple-actions/import-codesign-certs@v3
+        with:
+          p12-file-base64: ${{ secrets.APPLE_CERTIFICATE }}
+          p12-password: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
 
       - name: Install frontend dependencies
         run: bun install --frozen-lockfile
@@ -65,23 +91,254 @@ jobs:
       - name: Build sidecar (bun single-binary)
         run: bun run --cwd sidecar build
 
-      - name: Tauri build + sign + publish to GitHub Releases
+      - name: Tauri build + codesign + notarize + publish to GitHub Releases
+        # Tauri's macOS signing flow:
+        #   1. APPLE_CERTIFICATE / APPLE_CERTIFICATE_PASSWORD — resolved to the
+        #      keychain identity imported above (already present; passed for Tauri's
+        #      internal validation).
+        #   2. APPLE_SIGNING_IDENTITY — the "Developer ID Application: ..." string.
+        #   3. APPLE_ID / APPLE_PASSWORD / APPLE_TEAM_ID — used by xcrun notarytool
+        #      (NOT the deprecated altool) to submit for notarization and poll until
+        #      the ticket is stapled.  Tauri 2 orchestrates this automatically.
+        # If notarization times out or returns an indeterminate state, tauri-action
+        # exits non-zero — the release job fails and the artifact is uploaded below
+        # for diagnostic re-submission (see Upload step that follows).
         uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          # TODO: uncomment when signing keys are provisioned
-          # APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
-          # APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
-          # APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
-          # APPLE_ID: ${{ secrets.APPLE_ID }}
-          # APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
-          # APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
-          # TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
-          # TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
         with:
           tagName: ${{ github.ref_name }}
           releaseName: "ZoePlane ${{ github.ref_name }}"
           releaseBody: "See CHANGELOG.md for release notes."
           releaseDraft: true
           prerelease: false
-          args: ${{ matrix.args }}
+          args: --target universal-apple-darwin
+
+      # Preserve build output even on notarization failure so the operator can
+      # re-submit for notarization without a full rebuild.
+      - name: Upload macOS artifacts (diagnostic — always)
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: macos-artifacts-${{ github.ref_name }}
+          path: src-tauri/target/universal-apple-darwin/release/bundle/
+          if-no-files-found: ignore
+          retention-days: 14
+
+  # ────────────────────────────────────────────────────────────────────────────
+  # Windows — Authenticode-signed installer (.exe via NSIS, .msi via WiX)
+  # ────────────────────────────────────────────────────────────────────────────
+  release-windows:
+    name: Release (Windows)
+    runs-on: windows-latest
+
+    steps:
+      - name: Verify Windows signing secrets are present
+        # WINDOWS_CERTIFICATE: base64-encoded .pfx file
+        # WINDOWS_CERTIFICATE_PASSWORD: pfx export password
+        # Source: https://v2.tauri.app/distribute/sign/windows/
+        env:
+          WINDOWS_CERTIFICATE: ${{ secrets.WINDOWS_CERTIFICATE }}
+          WINDOWS_CERTIFICATE_PASSWORD: ${{ secrets.WINDOWS_CERTIFICATE_PASSWORD }}
+        shell: bash
+        run: |
+          missing=0
+          for var in WINDOWS_CERTIFICATE WINDOWS_CERTIFICATE_PASSWORD; do
+            if [ -z "${!var}" ]; then
+              echo "::error::Required secret '$var' is not configured. Add it to the repository's GitHub Actions secrets. See README.md signing setup."
+              missing=1
+            fi
+          done
+          if [ "$missing" -eq 1 ]; then
+            echo "::error::One or more required Windows signing secrets are missing. Aborting to prevent publishing an unsigned artifact."
+            exit 1
+          fi
+          echo "All Windows signing secrets present."
+
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v1
+        with:
+          bun-version: latest
+
+      - name: Setup Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Rust cache
+        uses: swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+
+      # Import the .pfx certificate into the Windows certificate store so
+      # signtool.exe (invoked by Tauri's Windows signing flow) can find it.
+      - name: Import Windows signing certificate
+        env:
+          WINDOWS_CERTIFICATE: ${{ secrets.WINDOWS_CERTIFICATE }}
+          WINDOWS_CERTIFICATE_PASSWORD: ${{ secrets.WINDOWS_CERTIFICATE_PASSWORD }}
+        shell: powershell
+        run: |
+          $certBytes = [System.Convert]::FromBase64String($env:WINDOWS_CERTIFICATE)
+          $certPath = Join-Path $env:RUNNER_TEMP "signing-cert.pfx"
+          [System.IO.File]::WriteAllBytes($certPath, $certBytes)
+          Import-PfxCertificate `
+            -FilePath $certPath `
+            -CertStoreLocation "Cert:\CurrentUser\My" `
+            -Password (ConvertTo-SecureString $env:WINDOWS_CERTIFICATE_PASSWORD -AsPlainText -Force)
+          Remove-Item $certPath -Force
+
+      - name: Install frontend dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Build UI
+        run: bun run build
+
+      - name: Build sidecar (bun single-binary)
+        run: bun run --cwd sidecar build
+
+      - name: Tauri build + Authenticode sign + publish to GitHub Releases
+        # Tauri's Windows signing flow uses the certificate imported into the
+        # Windows certificate store above.  WINDOWS_CERTIFICATE and
+        # WINDOWS_CERTIFICATE_PASSWORD are passed so tauri-action can locate the
+        # correct thumbprint.
+        # Source: https://v2.tauri.app/distribute/sign/windows/
+        uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          WINDOWS_CERTIFICATE: ${{ secrets.WINDOWS_CERTIFICATE }}
+          WINDOWS_CERTIFICATE_PASSWORD: ${{ secrets.WINDOWS_CERTIFICATE_PASSWORD }}
+        with:
+          tagName: ${{ github.ref_name }}
+          releaseName: "ZoePlane ${{ github.ref_name }}"
+          releaseBody: "See CHANGELOG.md for release notes."
+          releaseDraft: true
+          prerelease: false
+
+      - name: Upload Windows artifacts (diagnostic — always)
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: windows-artifacts-${{ github.ref_name }}
+          path: src-tauri/target/release/bundle/
+          if-no-files-found: ignore
+          retention-days: 14
+
+  # ────────────────────────────────────────────────────────────────────────────
+  # Linux — GPG-signed packages (.deb, .rpm, .AppImage)
+  # ────────────────────────────────────────────────────────────────────────────
+  release-linux:
+    name: Release (Linux)
+    runs-on: ubuntu-22.04
+
+    steps:
+      - name: Verify Linux signing secrets are present
+        # LINUX_GPG_PRIVATE_KEY: armored GPG private key (gpg --armor --export-secret-keys <keyid>)
+        # LINUX_GPG_PASSPHRASE: passphrase protecting the key
+        # These are used below to import into the GHA keyring and to populate the
+        # AppImageTool signing env vars (SIGN, SIGN_KEY, APPIMAGETOOL_SIGN_PASSPHRASE).
+        env:
+          LINUX_GPG_PRIVATE_KEY: ${{ secrets.LINUX_GPG_PRIVATE_KEY }}
+          LINUX_GPG_PASSPHRASE: ${{ secrets.LINUX_GPG_PASSPHRASE }}
+        run: |
+          missing=0
+          for var in LINUX_GPG_PRIVATE_KEY LINUX_GPG_PASSPHRASE; do
+            if [ -z "${!var}" ]; then
+              echo "::error::Required secret '$var' is not configured. Add it to the repository's GitHub Actions secrets. See README.md signing setup."
+              missing=1
+            fi
+          done
+          if [ "$missing" -eq 1 ]; then
+            echo "::error::One or more required Linux signing secrets are missing. Aborting to prevent publishing an unsigned artifact."
+            exit 1
+          fi
+          echo "All Linux signing secrets present."
+
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v1
+        with:
+          bun-version: latest
+
+      - name: Install Linux system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libwebkit2gtk-4.1-dev \
+            libappindicator3-dev \
+            librsvg2-dev \
+            patchelf
+
+      - name: Setup Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Rust cache
+        uses: swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+
+      # Import the GPG key so it is available to AppImageTool's signing flow.
+      # SIGN_KEY is set to the long key ID extracted after import.
+      # APPIMAGETOOL_FORCE_SIGN=1 ensures the build fails if signing fails
+      # (default: AppImage is generated even when signing fails — unacceptable
+      # for a signed release pipeline).
+      - name: Import GPG signing key
+        id: gpg_import
+        env:
+          LINUX_GPG_PRIVATE_KEY: ${{ secrets.LINUX_GPG_PRIVATE_KEY }}
+          LINUX_GPG_PASSPHRASE: ${{ secrets.LINUX_GPG_PASSPHRASE }}
+        run: |
+          echo "$LINUX_GPG_PRIVATE_KEY" | gpg --batch --import
+          KEY_ID=$(gpg --list-secret-keys --with-colons | awk -F: '/^sec/ { print $5 }' | head -1)
+          if [ -z "$KEY_ID" ]; then
+            echo "::error::Failed to extract GPG key ID after import. Verify LINUX_GPG_PRIVATE_KEY is a valid armored GPG private key."
+            exit 1
+          fi
+          echo "key_id=$KEY_ID" >> "$GITHUB_OUTPUT"
+          echo "GPG key imported: $KEY_ID"
+
+      - name: Install frontend dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Build UI
+        run: bun run build
+
+      - name: Build sidecar (bun single-binary)
+        run: bun run --cwd sidecar build
+
+      - name: Tauri build + GPG sign + publish to GitHub Releases
+        # AppImageTool signing env vars (canonical — https://v2.tauri.app/distribute/sign/linux/):
+        #   SIGN=1                        — enable AppImage signing
+        #   SIGN_KEY                      — GPG key ID to use
+        #   APPIMAGETOOL_SIGN_PASSPHRASE  — passphrase for the signing key
+        #   APPIMAGETOOL_FORCE_SIGN=1     — fail if signing fails (not the default)
+        uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          SIGN: "1"
+          SIGN_KEY: ${{ steps.gpg_import.outputs.key_id }}
+          APPIMAGETOOL_SIGN_PASSPHRASE: ${{ secrets.LINUX_GPG_PASSPHRASE }}
+          APPIMAGETOOL_FORCE_SIGN: "1"
+        with:
+          tagName: ${{ github.ref_name }}
+          releaseName: "ZoePlane ${{ github.ref_name }}"
+          releaseBody: "See CHANGELOG.md for release notes."
+          releaseDraft: true
+          prerelease: false
+
+      - name: Upload Linux artifacts (diagnostic — always)
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: linux-artifacts-${{ github.ref_name }}
+          path: src-tauri/target/release/bundle/
+          if-no-files-found: ignore
+          retention-days: 14
