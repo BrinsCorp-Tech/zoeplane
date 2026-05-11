@@ -78,6 +78,61 @@ fn log_violation(path: &str, caller: &str, operation: &str) {
 }
 
 // ---------------------------------------------------------------------------
+// Scope-check helper with ancestor probe (Story 1.12 §H)
+// ---------------------------------------------------------------------------
+//
+// `tauri::fs::Scope::is_allowed` calls `try_resolve_symlink_and_canonicalize`
+// internally. For paths that don't yet exist on disk, this may return the
+// uncanonicalized path, which can fail to match the registered (canonicalized)
+// glob patterns — particularly when symlinks exist in the path's parent chain
+// (e.g., macOS `/private/tmp` vs `/tmp`).
+//
+// The fix is to check the longest existing ancestor: if the path itself passes
+// `is_allowed`, great; otherwise walk up the parent chain until we find an
+// ancestor that exists, then scope-check that. This semantics is: "is this
+// path permitted to exist/be created within the scope?"
+//
+// For genuinely out-of-scope paths (e.g., `/etc/passwd`), the ancestor walk
+// eventually reaches `/etc` or `/`, neither of which is in scope, so the deny
+// is preserved. For in-scope nonexistent paths (e.g., `~/.claude/new-file.md`),
+// the parent `~/.claude` is in scope, so the probe returns `true`.
+//
+// This helper is used by all four FS commands for the upfront scope check.
+// The caller is responsible for logging and returning the appropriate error if
+// the probe returns `false`.
+
+/// Returns `true` if `path` is allowed by the FS runtime scope.
+///
+/// First checks the path itself. If that fails (because the path doesn't
+/// exist and canonicalization can't resolve it), walks up the parent chain
+/// until it finds an existing ancestor and checks that instead. This
+/// allows "does this file exist yet?" probes to succeed for paths inside
+/// in-scope directories, while still denying genuinely out-of-scope paths.
+fn is_allowed_for_probe(scope: &tauri::fs::Scope, path: &std::path::Path) -> bool {
+    // Fast path: path itself is allowed (works for existing in-scope paths).
+    if scope.is_allowed(path) {
+        return true;
+    }
+
+    // Ancestor probe for nonexistent paths (§H AC1/AC2).
+    // Walk up parent directories until we find one that exists on disk,
+    // then check if that ancestor is in scope.
+    let mut candidate = path.to_path_buf();
+    loop {
+        // Move to parent; if there is no parent we've reached the root without
+        // finding an in-scope ancestor — deny.
+        if !candidate.pop() {
+            return false;
+        }
+        // Once we find an existing ancestor, check its scope.
+        if candidate.exists() {
+            return scope.is_allowed(&candidate);
+        }
+        // Ancestor doesn't exist either; keep walking up.
+    }
+}
+
+// ---------------------------------------------------------------------------
 // Public IPC command wrappers
 // ---------------------------------------------------------------------------
 
@@ -103,11 +158,11 @@ pub async fn fs_read_file(
         "FS read_file requested"
     );
 
-    // Upfront allowlist check — same pattern as fs_write_file:182, fs_read_dir:233,
-    // fs_exists:305. If the path is outside the configured scope, log the violation
-    // and deny immediately without touching the filesystem.
+    // Upfront allowlist check — uses ancestor-probe helper (§H) so that reads
+    // of paths that don't exist yet but are inside an in-scope directory do not
+    // falsely trigger a violation.  See is_allowed_for_probe documentation.
     let scope = app.fs_scope();
-    if !scope.is_allowed(&resolved) {
+    if !is_allowed_for_probe(&scope, &resolved) {
         log_violation(&path, &caller, "read_file");
         return Err("path not allowed".to_string());
     }
@@ -159,10 +214,14 @@ pub async fn fs_write_file(
 
     // tauri-plugin-fs v2.5.1 does not expose a write() method on Fs<R>; the
     // plugin's write IPC handler is JS-only. We replicate FB-016 enforcement
-    // ourselves: explicit allowlist check via fs_scope().is_allowed(), then
-    // std::fs::write for the actual I/O.
+    // ourselves: explicit allowlist check via ancestor-probe helper (§H AC2),
+    // then std::fs::write for the actual I/O.
+    // The ancestor probe is critical for writes: writing a NEW file to an
+    // in-scope directory would fail scope-check without the probe because the
+    // target file doesn't exist yet — is_allowed would return false even though
+    // the parent directory is in scope.
     let scope = app.fs_scope();
-    if !scope.is_allowed(&resolved) {
+    if !is_allowed_for_probe(&scope, &resolved) {
         log_violation(&path, &caller, "write_file");
         return Err("path not allowed".to_string());
     }
@@ -211,9 +270,10 @@ pub async fn fs_read_dir(
 
     // tauri-plugin-fs v2.5.1 does not expose a read_dir() method on Fs<R>; the
     // plugin's read_dir IPC handler is JS-only. Same pattern as fs_write_file:
-    // explicit scope check, then std::fs::read_dir for the listing.
+    // explicit scope check via ancestor-probe helper (§H AC2), then
+    // std::fs::read_dir for the listing.
     let scope = app.fs_scope();
-    if !scope.is_allowed(&resolved) {
+    if !is_allowed_for_probe(&scope, &resolved) {
         log_violation(&path, &caller, "read_dir");
         return Err("path not allowed".to_string());
     }
@@ -282,10 +342,11 @@ pub async fn fs_exists(
     );
 
     // tauri-plugin-fs v2.5.1 does not expose an exists() method on Fs<R>; the
-    // plugin's exists IPC handler is JS-only. Pattern as above: explicit scope
-    // check, then std::path::Path::exists() for the lookup.
+    // plugin's exists IPC handler is JS-only. Uses ancestor-probe helper (§H AC1)
+    // so that checking "does this in-scope file exist yet?" returns Ok(false)
+    // rather than Err("path not allowed") for nonexistent-but-in-scope paths.
     let scope = app.fs_scope();
-    if !scope.is_allowed(&resolved) {
+    if !is_allowed_for_probe(&scope, &resolved) {
         log_violation(&path, &caller, "exists");
         return Err("path not allowed".to_string());
     }

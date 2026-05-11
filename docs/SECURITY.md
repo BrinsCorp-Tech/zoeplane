@@ -40,13 +40,18 @@ All filesystem operations from the React UI and sidecar route through four Tauri
 
 Each wrapper performs an upfront `app.fs_scope().is_allowed(path)` check before touching the filesystem. On a scope denial it calls `log_violation()` (`commands/fs.rs:54-78`), which emits a structured ERROR event on the `fs-allowlist` tracing target and a JSON-serialized line on stderr. The operation is then denied without touching the filesystem.
 
-**Path scope** — declared in `src-tauri/tauri.conf.json` under `plugins.fs.scope.allow` (Tauri 2.x retains path scope in `tauri.conf.json`):
+**Path scope** — Tauri 2.x uses a three-way scope model (ADR-003). The canonical allowlist is:
 
 ```
 $HOME/.claude/**
 $APPDATA/com.brinscorp.zoeplane/**
 $APP/**
 ```
+
+This allowlist appears in two locations that must be kept in sync:
+
+- **`src-tauri/capabilities/default.json` `fs:scope.allow`** — the IPC-dispatch-gating scope (capability layer, consumed by the plugin's built-in commands if any are JS-exposed).
+- **`src-tauri/src/lib.rs::run()::setup()`** — the runtime scope state (`app.fs_scope()`), populated programmatically at startup via `app.path().home_dir()`, `app.path().app_data_dir()`, and `app.path().resource_dir()`. This is the scope enforced by the custom `fs_*` IPC commands. See ADR-003 for why capability `fs:scope` entries do NOT automatically populate `app.fs_scope()`.
 
 **Method permissions** — per Tauri 2.x's capability model (ADR-002), method-level grants are declared in `src-tauri/capabilities/default.json`, not in `tauri.conf.json`. The prior Tauri 1.x schema (`plugins.fs.readFile: true`, `writeFile: true`, etc.) has been removed. The current grants are: `fs:default`, `fs:allow-read-file`, `fs:allow-write-file`, `fs:allow-read-dir`, `fs:allow-exists`, `fs:allow-mkdir`. There is no `fs:allow-copy-file`, `fs:allow-remove-file`, `fs:allow-remove-dir`, or `fs:allow-rename-file` — operations not used by the current IPC surface are not granted.
 
@@ -102,4 +107,4 @@ We will credit reporters in the release notes and CHANGELOG unless anonymity is 
 
 ---
 
-_Last reviewed: 2026-05-10 by project-manager agent — Story 1.11 (Tauri 2.x capability model, FS permission schema updated)._
+_Last reviewed: 2026-05-10 by sprint-programmer agent — Story 1.12 (three-way Tauri 2.x scope model, ADR-003; runtime scope init; fs.rs ancestor probe)._

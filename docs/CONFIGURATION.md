@@ -35,7 +35,12 @@ These values are baked into each release binary. They can only be changed by reb
 
 ### Filesystem Allowlist
 
-Declared under `plugins.fs.scope` in `tauri.conf.json`. These paths are enforced by `src-tauri/src/commands/fs.rs`. All filesystem IPC operations are denied for paths outside this allowlist; violations are logged at ERROR to the `fs-allowlist` tracing target.
+ZoePlane enforces a three-path allowlist on all filesystem IPC operations, implemented across two enforcement layers per **ADR-003**:
+
+1. **Capability scope** — `src-tauri/capabilities/default.json` contains an `fs:scope` permission entry declaring the canonical allowlist. This gates the plugin's built-in IPC commands via Tauri's ACL machinery.
+2. **Runtime scope** — `lib.rs::run().setup()` calls `app.fs_scope().allow_directory(...)` for each canonical path, populating the `tauri::fs::Scope` runtime object. Custom Rust IPC wrappers in `src-tauri/src/commands/fs.rs` check this runtime scope via `is_allowed(...)`.
+
+Both layers reference the same three semantic paths:
 
 | Path pattern                         | Purpose                                                                                 |
 | ------------------------------------ | --------------------------------------------------------------------------------------- |
@@ -59,13 +64,19 @@ The full expanded `appDataDir` for ZoePlane is:
 | Windows  | `%APPDATA%\com.brinscorp.zoeplane\`                     |
 | Linux    | `~/.local/share/com.brinscorp.zoeplane/`                |
 
+All filesystem IPC operations are denied for paths outside this allowlist; violations are logged at ERROR to the `fs-allowlist` tracing target.
+
 ### Plugin Permissions (Tauri 2.x Capability Model)
 
 Plugin method permissions are **not** declared in `tauri.conf.json` in Tauri 2.x. The prior Tauri 1.x boolean-toggle schema (`plugins.fs.readFile: true`, `writeFile: true`, etc.) has been removed. Per ADR-002, method-level grants live in `src-tauri/capabilities/default.json`.
 
-The `plugins.fs` block in `tauri.conf.json` now contains only the `scope` field (the `allow`/`deny` path arrays documented in the Filesystem Allowlist section above). The `plugins.shell` block contains only `"open": false` (URL-open access is not granted in Sprint 1).
+The `plugins.fs` block has been removed from `tauri.conf.json` entirely. `tauri-plugin-fs` v2.5.1 accepts only `requireLiteralLeadingDot` as runtime configuration, and ZoePlane uses the platform default without overriding it. If a future story requires overriding `requireLiteralLeadingDot`, that story re-adds only the `plugins.fs.requireLiteralLeadingDot` key — never a `scope` array, which is a Tauri 1.x construct rejected at runtime by the 2.x schema. FS path scope is governed by `capabilities/default.json` (ACL layer) and programmatic runtime scope initialization in `lib.rs` (runtime layer) per ADR-003.
 
-See `docs/ARCHITECTURE.md` — "Tauri 2.x Capability Model" for the full permission surface table and the pattern for adding future plugin permissions.
+The `plugins.shell` block contains only `"open": false` (URL-open access is not granted in Sprint 1). The `plugins.deep-link` block contains only `desktop.schemes: ["zoeplane"]` (documented below). No other `plugins.*` runtime configuration blocks are present in Sprint 1.
+
+`app.withGlobalTauri: true` is set as a dev-ergonomics setting enabling `window.__TAURI__` in the DevTools console for smoke testing. This is a Sprint 1 development convenience and is scheduled for revert to `false` before v0.1.0-alpha or when the first untrusted-content surface lands (whichever comes first) — see `docs/stories/epic-01/SPRINT-2-CARRYOVERS.md`.
+
+See `docs/ARCHITECTURE.md` — "Tauri 2.x Capability Model" and "Three-way Tauri 2.x scope model" for the full permission surface table and the pattern for adding future plugin permissions.
 
 ### Deep-Link
 
@@ -114,13 +125,14 @@ Logging uses the `tracing` crate with a `FmtSubscriber` writing structured outpu
 
 Named log targets used by ZoePlane:
 
-| Target              | Emitter          | What it logs                                                               |
-| ------------------- | ---------------- | -------------------------------------------------------------------------- |
-| `sidecar-lifecycle` | `lib.rs`         | Sidecar spawn, port announcement, stderr forwarding, crash/shutdown events |
-| `sidecar-ipc`       | `ipc.rs`         | Health-check requests and responses, timeout events                        |
-| `fs-allowlist`      | `commands/fs.rs` | Every FS operation: request, permit, deny (violations at ERROR level)      |
-| `fs-allowlist-json` | `commands/fs.rs` | Machine-parseable JSON duplicate of violation entries                      |
-| `deep-link`         | `lib.rs`         | Received `zoeplane://` URL events                                          |
+| Target              | Emitter          | What it logs                                                                              |
+| ------------------- | ---------------- | ----------------------------------------------------------------------------------------- |
+| `sidecar-lifecycle` | `lib.rs`         | Sidecar spawn, port announcement, stderr forwarding, crash/shutdown events                |
+| `sidecar-ipc`       | `ipc.rs`         | Health-check requests and responses, timeout events                                       |
+| `fs-scope-init`     | `lib.rs`         | Runtime FS scope initialization: each registered allowlist path (INFO) or failure (ERROR) |
+| `fs-allowlist`      | `commands/fs.rs` | Every FS operation: request, permit, deny (violations at ERROR level)                     |
+| `fs-allowlist-json` | `commands/fs.rs` | Machine-parseable JSON duplicate of violation entries                                     |
+| `deep-link`         | `lib.rs`         | Received `zoeplane://` URL events                                                         |
 
 ### Sidecar (Node.js)
 
@@ -140,4 +152,4 @@ Fields: `level` (`INFO` | `WARN` | `ERROR`), `message`, `pid`, plus any `extra` 
 
 ---
 
-_Last reviewed: 2026-05-10 by project-manager agent — Story 1.11 (Plugin Permissions section updated for Tauri 2.x capability model; 1.x boolean-toggle table removed)._
+_Last reviewed: 2026-05-10 by project-manager agent — Story 1.12 (Filesystem Allowlist section updated for ADR-003 three-way scope model; plugins.fs block removal documented; withGlobalTauri policy noted; fs-scope-init log target added)._

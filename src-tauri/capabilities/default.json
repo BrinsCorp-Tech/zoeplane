@@ -13,6 +13,10 @@
     "fs:allow-exists",
     "fs:allow-mkdir",
     {
+      "identifier": "fs:scope",
+      "allow": ["$HOME/.claude/**", "$APPDATA/com.brinscorp.zoeplane/**", "$APP/**"]
+    },
+    {
       "identifier": "shell:allow-execute",
       "allow": [
         {

@@ -13,6 +13,14 @@ The React UI communicates only with the Rust shell via Tauri commands. The React
 
 All Tauri commands are gated by the Tauri 2.x capability model (ADR-002). The `main` window's granted capabilities are declared in `src-tauri/capabilities/default.json`. The FS commands (`fs_read_file`, `fs_write_file`, `fs_read_dir`, `fs_exists`) require the corresponding `fs:allow-*` identifiers to be present in that file; the `ping` and `sidecar_status` commands are covered by `core:default`. The Rust function signatures and error modes documented below are unchanged by the capability model migration — capability gating is enforced by Tauri before the command handler is invoked.
 
+#### Tauri 2.x scope concepts (three-way split)
+
+Tauri 2.x has three distinct scope layers that are easy to conflate (ADR-003 is the canonical reference):
+
+1. **Plugin runtime configuration** — fields in `tauri.conf.json plugins.<name>`. Read once at plugin init; never mutated. For `tauri-plugin-fs` v2.5.1, the only accepted field is `requireLiteralLeadingDot`.
+2. **Capability ACL gating** — permission entries in `capabilities/default.json`. Enforced by Tauri at IPC dispatch before any command handler is called. The `fs:scope` entry here documents the canonical allowlist and gates any future plugin built-in commands exposed via JS.
+3. **Plugin runtime scope state** — an in-memory mutable object owned by the plugin, accessed via `app.fs_scope()` (provided by `tauri_plugin_fs::FsExt`). **This is the scope that the FS commands' `Err("path not allowed")` deny is enforced against.** Capability `fs:scope` entries do NOT populate this scope; it is populated programmatically at app startup in `src-tauri/src/lib.rs::run()::setup()`. See ADR-003 for the rationale and invariants.
+
 ## Tauri Commands
 
 ### `ping`
@@ -215,4 +223,4 @@ These are documented here as forward declarations visible in the codebase commen
 
 ---
 
-_Last reviewed: 2026-05-10 by project-manager agent — Story 1.11 (capability gating note added)._
+_Last reviewed: 2026-05-10 by sprint-programmer agent — Story 1.12 (three-way Tauri 2.x scope model added; ADR-003 reference)._

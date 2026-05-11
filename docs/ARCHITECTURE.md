@@ -131,21 +131,33 @@ Enumerated `allow-*` permissions are used instead of blanket `<plugin>:default` 
 
 The one deliberate exception is `core:default`: it covers ~80 baseline identifiers whose stability across Tauri minor versions is contractually maintained by the Tauri project. Enumerating them individually would bury the meaningful permission grants under boilerplate.
 
+### Three-way Tauri 2.x scope model (ADR-003)
+
+ADR-002 established the configuration/capability split. Manual smoke testing after Story 1.11 surfaced a third, distinct concept — the **plugin runtime scope state** — formalized in **ADR-003**. Every Tauri 2.x plugin has up to three independent scope layers:
+
+1. **Plugin runtime configuration** — fields the plugin's `Config` struct deserializes from `tauri.conf.json plugins.<name>`. Examples: `plugins.deep-link.desktop.schemes`, `plugins.shell.open`. Read once at plugin init; never mutated at runtime.
+2. **Capability permissions** — IPC-dispatch ACL entries in `capabilities/default.json`. Gate which commands the webview may invoke and, for scope-bearing entries (e.g., `fs:scope`), constrain argument values consumed by the plugin's built-in IPC handlers via Tauri's `GlobalScope<T>` extractor.
+3. **Plugin runtime scope state** — an in-memory mutable object owned by the plugin, accessed via an extension trait (e.g., `app.fs_scope()` from `tauri_plugin_fs::FsExt`). Populated programmatically at app setup via `allow_directory` / `allow_file` calls, and dynamically by user actions (file picker, drag-drop). This is the scope queried by custom Rust IPC wrappers such as `commands/fs.rs::fs_*` via `is_allowed(...)`. Capability `fs:scope` entries do **not** populate it — the two are independent storage locations.
+
+For `tauri-plugin-fs`, the runtime scope is initialized empty by the plugin and must be populated at app setup from `lib.rs::run().setup`. ZoePlane registers the three canonical allowlist paths (`$HOME/.claude/**`, `$APPDATA/com.brinscorp.zoeplane/**`, `$APP/**`) via `app.fs_scope().allow_directory(...)` at startup, resolving variable prefixes through `app.path()` to guarantee physical-path equivalence with the capability file's scope entries. See ADR-003 for the full rationale and the source-of-truth discipline between the capability file and the setup code.
+
 ### Adding a new plugin or capability
 
-Future plugin additions follow the pattern established by ADR-002:
+Future plugin additions follow the pattern established by ADR-002 and ADR-003:
 
 1. Add the plugin crate to `src-tauri/Cargo.toml` and register it via `.plugin(tauri_plugin_<name>::init())` in `lib.rs`.
 2. Add the required `<plugin>:allow-<method>` identifiers to `capabilities/default.json` (or a new per-feature capability file if window-scoped restriction is needed).
 3. If the plugin requires instance configuration (allowlist scopes, URL schemes), add a `plugins.<name>` block to `tauri.conf.json` containing **only** configuration — never method permissions.
 4. If the plugin uses sidecar or external-binary execution, add a `shell:allow-execute` entry to `capabilities/default.json` — never to `tauri.conf.json`.
+5. If a custom Rust IPC command checks the plugin's runtime scope (e.g., `app.<plugin>_scope().is_allowed(...)`), populate that scope programmatically in the `.setup()` closure — capability file entries alone will not populate it (see ADR-003).
 
 ## Architectural Decisions
 
 See `docs/architecture/decisions/README.md` for the full ADR index.
 
 - **ADR-001** — Retains `com.brinscorp.zoeplane` as the permanent bundle identifier. Rationale: honest correspondence with the BrinsCorp-Tech signing trust root; changing after first release would require Apple notarization re-binding, Homebrew tap updates, winget renamespace, data migration, and deep-link re-registration.
-- **ADR-002** — Adopts Tauri 2.x's capability model in full, with four invariants: single capability file at `src-tauri/capabilities/default.json` for Sprint 1; enumerate every permission (no blanket `<plugin>:default` where the surface exceeds need); sidecar grants live in `capabilities/default.json`, never in `tauri.conf.json`; hard separation between plugin configuration (`tauri.conf.json`) and plugin permissions (capability files). See section above and ADR-002 for full rationale.
+- **ADR-002** — Adopts Tauri 2.x's capability model in full, with four invariants: single capability file at `src-tauri/capabilities/default.json` for Sprint 1; enumerate every permission (no blanket `<plugin>:default` where the surface exceeds need); sidecar grants live in `capabilities/default.json`, never in `tauri.conf.json`; hard separation between plugin configuration (`tauri.conf.json`) and plugin permissions (capability files). See section above and ADR-002 for full rationale. Note: invariant 4 is partially superseded by ADR-003.
+- **ADR-003** — Formalizes the three-way Tauri 2.x scope model (plugin configuration / capability permissions / plugin runtime scope state) and mandates programmatic population of `app.fs_scope()` at app setup. Establishes that capability `fs:scope` entries do not populate the runtime scope, and that custom Rust IPC wrappers must use the runtime scope for defense-in-depth. See "Three-way Tauri 2.x scope model" section above.
 
 ## Glossary
 
@@ -163,4 +175,4 @@ See `docs/architecture/decisions/README.md` for the full ADR index.
 
 ---
 
-_Last reviewed: 2026-05-10 by project-manager agent — Story 1.11 (Tauri 2.x capability model adoption, ADR-002)._
+_Last reviewed: 2026-05-10 by project-manager agent — Story 1.12 (Tauri 2.x runtime scope initialization, ADR-003; three-way scope model added)._

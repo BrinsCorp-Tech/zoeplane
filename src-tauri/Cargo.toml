@@ -42,6 +42,7 @@ panic = "abort"
 strip = true
 
 [dev-dependencies]
+tauri = { version = "2", features = ["test"] }
 tracing-test = { version = "0.2", features = ["no-env-filter"] }
 tempfile = "3"
 
