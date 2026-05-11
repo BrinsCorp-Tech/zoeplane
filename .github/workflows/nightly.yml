@@ -97,8 +97,7 @@ jobs:
         run: bun run test
 
       - name: Check tokens completeness
-        run: |
-          bun run --cwd packages/design-tokens check-tokens || echo "TODO: token-completeness check not yet implemented"
+        run: bun run --cwd packages/design-tokens check-tokens
 
   # ──────────────────────────────────────────────────────────────────────────────
   # build: unsigned Tauri platform builds

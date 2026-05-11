@@ -95,8 +95,7 @@ jobs:
       - name: Check tokens completeness
         # Every semantic token in :root[data-theme="light"] must also exist in
         # :root[data-theme="dark"].  The script lives in packages/design-tokens.
-        run: |
-          bun run --cwd packages/design-tokens check-tokens || echo "TODO: token-completeness check not yet implemented — add in Sprint 1"
+        run: bun run --cwd packages/design-tokens check-tokens
 
   # ──────────────────────────────────────────────────────────────────────────────
   # scaffold-health: fast pre-flight checks that are platform-invariant.
