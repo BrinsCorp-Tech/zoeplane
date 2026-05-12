@@ -9,7 +9,7 @@
   },
   "color": {
     "gray": {
-      "50":  { "$value": "oklch(0.985 0.002 250)", "$type": "color" },
+      "50": { "$value": "oklch(0.985 0.002 250)", "$type": "color" },
       "100": { "$value": "oklch(0.965 0.003 250)", "$type": "color" },
       "200": { "$value": "oklch(0.920 0.005 250)", "$type": "color" },
       "300": { "$value": "oklch(0.860 0.007 250)", "$type": "color" },
@@ -24,7 +24,7 @@
       "975": { "$value": "oklch(0.060 0.003 250)", "$type": "color" }
     },
     "accent": {
-      "50":  { "$value": "oklch(0.970 0.020 260)", "$type": "color" },
+      "50": { "$value": "oklch(0.970 0.020 260)", "$type": "color" },
       "100": { "$value": "oklch(0.940 0.040 260)", "$type": "color" },
       "200": { "$value": "oklch(0.890 0.080 260)", "$type": "color" },
       "400": { "$value": "oklch(0.720 0.150 260)", "$type": "color" },
@@ -32,6 +32,21 @@
       "600": { "$value": "oklch(0.560 0.200 260)", "$type": "color" },
       "700": { "$value": "oklch(0.480 0.180 260)", "$type": "color" },
       "800": { "$value": "oklch(0.400 0.150 260)", "$type": "color" }
+    },
+    "success": {
+      "400": { "$value": "oklch(0.760 0.150 150)", "$type": "color" },
+      "500": { "$value": "oklch(0.660 0.170 150)", "$type": "color" },
+      "600": { "$value": "oklch(0.560 0.170 150)", "$type": "color" }
+    },
+    "warn": {
+      "400": { "$value": "oklch(0.800 0.150 75)", "$type": "color" },
+      "500": { "$value": "oklch(0.720 0.170 75)", "$type": "color" },
+      "600": { "$value": "oklch(0.620 0.170 75)", "$type": "color" }
+    },
+    "danger": {
+      "400": { "$value": "oklch(0.700 0.180 25)", "$type": "color" },
+      "500": { "$value": "oklch(0.620 0.220 25)", "$type": "color" },
+      "600": { "$value": "oklch(0.540 0.220 25)", "$type": "color" }
     },
     "info": {
       "400": { "$value": "oklch(0.720 0.130 220)", "$type": "color" },
@@ -42,6 +57,20 @@
       "400": { "$value": "oklch(0.700 0.150 320)", "$type": "color" },
       "500": { "$value": "oklch(0.580 0.170 320)", "$type": "color" },
       "600": { "$value": "oklch(0.480 0.170 320)", "$type": "color" }
+    },
+    "event-family": {
+      "tool-500": { "$value": "oklch(0.620 0.080 200)", "$type": "color" },
+      "tool-muted": { "$value": "oklch(0.940 0.040 200)", "$type": "color" },
+      "tool-muted-dark": { "$value": "oklch(0.250 0.060 200)", "$type": "color" },
+      "session-500": { "$value": "oklch(0.600 0.080 160)", "$type": "color" },
+      "session-muted": { "$value": "oklch(0.940 0.040 160)", "$type": "color" },
+      "session-muted-dark": { "$value": "oklch(0.240 0.060 160)", "$type": "color" },
+      "prompt-500": { "$value": "oklch(0.620 0.080 280)", "$type": "color" },
+      "prompt-muted": { "$value": "oklch(0.940 0.040 280)", "$type": "color" },
+      "prompt-muted-dark": { "$value": "oklch(0.250 0.060 280)", "$type": "color" },
+      "compact-500": { "$value": "oklch(0.640 0.080 60)", "$type": "color" },
+      "compact-muted": { "$value": "oklch(0.950 0.040 60)", "$type": "color" },
+      "compact-muted-dark": { "$value": "oklch(0.260 0.060 60)", "$type": "color" }
     }
   }
 }
