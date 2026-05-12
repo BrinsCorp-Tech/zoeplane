@@ -8,6 +8,10 @@
  * Types private to one process live in that process's own source tree.
  */
 
+// Theme contract (ThemeProvider ↔ Plugin SDK)
+import type { ThemePreference } from "./theme";
+export type { ThemePreference, ResolvedTheme, ThemeChangeMessage } from "./theme";
+
 // ============================================================
 // Resource taxonomy (PRD §1.9)
 // ============================================================
@@ -123,7 +127,7 @@ export type RunEventType =
  * TODO (Epic 10): expand with per-feature preferences.
  */
 export interface UserPreferences {
-  theme: "system" | "light" | "dark";
+  theme: ThemePreference;
   sidebarCollapsed: boolean;
   inspectorOpen: boolean;
   commandPaletteHistory: string[]; // recent commands, max 20

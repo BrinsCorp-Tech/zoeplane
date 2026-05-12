@@ -18,5 +18,9 @@ export default defineConfig({
     ],
     // No test files exist yet in the skeleton — pass rather than error.
     passWithNoTests: true,
+
+    // JSDOM environment for React component tests (ThemeProvider axe harness, etc.)
+    // File-level overrides via `// @vitest-environment node` for non-DOM tests.
+    environment: "jsdom",
   },
 });

@@ -67,6 +67,8 @@ storybook-static/
 
 # ---- Chromatic ----
 .chromatic/
+chromatic-diagnostics.json
+chromatic.log
 
 # ---- Test coverage ----
 coverage/

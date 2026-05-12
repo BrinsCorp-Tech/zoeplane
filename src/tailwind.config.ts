@@ -76,6 +76,10 @@ const config: Config = {
         input:       "var(--color-surface)",
         ring:        "var(--color-focus-ring)",
         muted:       "var(--color-surface-muted)",
+        // Additional shadcn/ui aliases (missing from initial scaffold)
+        popover:     "var(--color-surface-overlay)",
+        destructive: "var(--color-danger)",
+        secondary:   "var(--color-surface-muted)",
       },
       borderRadius: {
         sm:   "var(--radius-sm)",
@@ -107,8 +111,8 @@ const config: Config = {
   },
 
   plugins: [
-    // shadcn/ui requires tailwindcss-animate for its animation utilities
-    // TODO (Sprint 1): add require("tailwindcss-animate") once installed
+    // shadcn/ui animation utilities — required for Radix UI enter/exit transitions
+    require("tailwindcss-animate"),
   ],
 };
 

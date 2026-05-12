@@ -139,3 +139,15 @@ button:disabled {
     scroll-behavior: auto !important;
   }
 }
+
+/* Class-based reduced-motion variant — mirrors the @media rule above.
+   Used by Storybook's "Reduced motion" toolbar to force the variant even
+   when the OS preference is not set. Applied to <html> by preview.ts decorator. */
+.prefers-reduced-motion *,
+.prefers-reduced-motion *::before,
+.prefers-reduced-motion *::after {
+  animation-duration: 0.01ms !important;
+  animation-iteration-count: 1 !important;
+  transition-duration: 0.01ms !important;
+  scroll-behavior: auto !important;
+}
