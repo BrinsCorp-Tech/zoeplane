@@ -57,6 +57,7 @@ const THEME_BRANCH_PATTERNS: Array<{ re: RegExp; label: string }> = [
   { re: /isDark\b/g, label: "isDark variable" },
   { re: /isLight\b/g, label: "isLight variable" },
   { re: /data-theme.*dark/g, label: 'inline data-theme="dark" on child element' },
+  { re: /\bdark:/g, label: 'Tailwind dark: variant in component className (use semantic token instead)' },
 ];
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
