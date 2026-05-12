@@ -5,7 +5,9 @@
   "private": true,
   "type": "module",
   "scripts": {
+    "predev": "bun run --cwd .. tokens:build",
     "dev": "vite",
+    "prebuild": "bun run --cwd .. tokens:build",
     "build": "vite build",
     "preview": "vite preview",
     "typecheck": "tsc --noEmit"
