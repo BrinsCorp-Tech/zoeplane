@@ -7,7 +7,7 @@
   "main": "src/index.ts",
   "scripts": {
     "build": "node style-dictionary.config.mjs",
-    "check-tokens": "node style-dictionary.config.mjs && echo 'tokens:check PASS — src/styles/tokens.css generated successfully from seed JSON'",
+    "check-tokens": "node style-dictionary.config.mjs && test -s ../../src/styles/tokens.css && echo 'tokens:check PASS — pipeline clean, tokens.css is non-empty'",
     "typecheck": "tsc --noEmit"
   },
   "devDependencies": {
