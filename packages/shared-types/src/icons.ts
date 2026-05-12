@@ -35,6 +35,7 @@ export type IconName =
   | "menu"
   | "home"
   | "external-link"
+  | "more-horizontal"
   // File / Data
   | "file"
   | "folder"
@@ -53,6 +54,7 @@ export type IconName =
   | "play"
   | "pause"
   | "circle-dot"
+  | "x-circle"
   // Domain
   | "terminal"
   | "git-branch"

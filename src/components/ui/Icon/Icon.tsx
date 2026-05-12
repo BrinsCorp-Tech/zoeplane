@@ -31,6 +31,7 @@ import {
   Loader2,
   Lock,
   Menu,
+  MoreHorizontal,
   Network,
   Pause,
   Play,
@@ -43,6 +44,7 @@ import {
   Trash,
   Unlock,
   X,
+  XCircle,
   type LucideProps,
 } from "lucide-react";
 import type { IconName } from "@zoeplane/shared-types";
@@ -87,6 +89,7 @@ const ICON_MAP: Record<IconName, React.ComponentType<LucideProps>> = {
   menu: Menu,
   home: Home,
   "external-link": ExternalLink,
+  "more-horizontal": MoreHorizontal,
   // File / Data
   file: File,
   folder: Folder,
@@ -105,6 +108,7 @@ const ICON_MAP: Record<IconName, React.ComponentType<LucideProps>> = {
   play: Play,
   pause: Pause,
   "circle-dot": CircleDot,
+  "x-circle": XCircle,
   // Domain
   terminal: Terminal,
   "git-branch": GitBranch,
@@ -153,14 +157,7 @@ const Icon = React.forwardRef<SVGSVGElement, IconProps>(
       : { "aria-hidden": true as const };
 
     return (
-      <LucideIcon
-        ref={ref}
-        width={px}
-        height={px}
-        strokeWidth={2}
-        {...a11yProps}
-        {...props}
-      />
+      <LucideIcon ref={ref} width={px} height={px} strokeWidth={2} {...a11yProps} {...props} />
     );
   },
 );
