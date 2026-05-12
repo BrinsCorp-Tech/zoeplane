@@ -45,6 +45,11 @@ const COMPONENTS_DIR = join(__dirname, "..");
 const EXCLUDED_FILES = new Set([
   // ThemeProvider legitimately references light/dark as managed values.
   join(COMPONENTS_DIR, "theme", "ThemeProvider.tsx"),
+  // Toast.tsx reads data-theme ONCE to pass Sonner's `theme` prop (third-party
+  // library interop). This is not a JSX theme branch — it does not produce
+  // conditional rendering or classNames. The third-party Sonner library has no
+  // knowledge of ZoePlane's data-theme attribute, so the prop must be explicit.
+  join(COMPONENTS_DIR, "ui", "Toast", "Toast.tsx"),
 ]);
 
 /** Directories that are excluded from scanning (test files may reference these patterns). */
@@ -57,7 +62,10 @@ const THEME_BRANCH_PATTERNS: Array<{ re: RegExp; label: string }> = [
   { re: /isDark\b/g, label: "isDark variable" },
   { re: /isLight\b/g, label: "isLight variable" },
   { re: /data-theme.*dark/g, label: 'inline data-theme="dark" on child element' },
-  { re: /\bdark:/g, label: 'Tailwind dark: variant in component className (use semantic token instead)' },
+  {
+    re: /\bdark:/g,
+    label: "Tailwind dark: variant in component className (use semantic token instead)",
+  },
 ];
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
