@@ -1,15 +1,40 @@
 <!doctype html>
-<html lang="en" data-theme="system">
+<html lang="en" data-theme="light">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>ZoePlane</title>
     <!--
-      data-theme is set to "system" initially; the React app reads
-      user_preferences.theme from SQLite and flips the attribute to "light"
-      or "dark" before first paint to avoid FOUC.
+      FOUC prevention: this inline script runs synchronously before any CSS or
+      React code is parsed. It reads the stored theme preference from localStorage
+      and immediately sets data-theme on <html> so the correct token layer is
+      active before the first paint. This eliminates the flash-of-wrong-theme
+      that would occur if ThemeProvider applied the theme in a useEffect (async,
+      after paint). See dark-mode-architecture.md §3 for the full rationale.
+
+      Key: "zoeplane:theme" — matches ThemeProvider's STORAGE_KEY constant.
       Theme switching is always instant (no CSS transition) per ux-spec Principle 5.
     -->
+    <script>
+      (function () {
+        try {
+          var stored = localStorage.getItem("zoeplane:theme");
+          var theme;
+          if (stored === "light" || stored === "dark") {
+            theme = stored;
+          } else {
+            // "system" or absent — resolve via OS preference
+            theme = window.matchMedia("(prefers-color-scheme: dark)").matches
+              ? "dark"
+              : "light";
+          }
+          document.documentElement.setAttribute("data-theme", theme);
+        } catch (e) {
+          // localStorage unavailable — default to light
+          document.documentElement.setAttribute("data-theme", "light");
+        }
+      })();
+    </script>
   </head>
   <body>
     <div id="root"></div>
