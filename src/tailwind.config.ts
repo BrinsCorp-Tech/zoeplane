@@ -43,6 +43,7 @@ const config: Config = {
           DEFAULT:    "var(--color-accent)",
           foreground: "var(--color-accent-foreground)",
           hover:      "var(--color-accent-hover)",
+          active:     "var(--color-accent-active)",
           muted:      "var(--color-accent-muted)",
         },
         success: {
@@ -71,15 +72,36 @@ const config: Config = {
           foreground: "var(--color-quarantine-foreground)",
         },
         // shadcn/ui convention aliases
-        primary:     "var(--color-accent)",
-        card:        "var(--color-surface)",
+        primary: {
+          DEFAULT:    "var(--color-accent)",
+          foreground: "var(--color-accent-foreground)",
+        },
+        card: {
+          DEFAULT:    "var(--color-surface)",
+          foreground: "var(--color-foreground)",
+          border:     "var(--color-border)",
+        },
         input:       "var(--color-surface)",
         ring:        "var(--color-focus-ring)",
-        muted:       "var(--color-surface-muted)",
+        muted: {
+          DEFAULT:    "var(--color-surface-muted)",
+          foreground: "var(--color-foreground-muted)",
+        },
         // Additional shadcn/ui aliases (missing from initial scaffold)
-        popover:     "var(--color-surface-overlay)",
-        destructive: "var(--color-danger)",
-        secondary:   "var(--color-surface-muted)",
+        popover: {
+          DEFAULT:    "var(--color-surface-overlay)",
+          foreground: "var(--color-foreground)",
+        },
+        destructive: {
+          DEFAULT:    "var(--color-danger)",
+          foreground: "var(--color-danger-foreground)",
+        },
+        secondary: {
+          DEFAULT:    "var(--color-surface-muted)",
+          foreground: "var(--color-foreground)",
+        },
+        "border-strong":  "var(--color-border-strong)",
+        "hover-overlay":  "var(--color-hover-overlay)",
       },
       borderRadius: {
         sm:   "var(--radius-sm)",

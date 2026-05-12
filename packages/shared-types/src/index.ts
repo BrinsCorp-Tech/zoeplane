@@ -12,6 +12,9 @@
 import type { ThemePreference } from "./theme";
 export type { ThemePreference, ResolvedTheme, ThemeChangeMessage } from "./theme";
 
+// Icon allowlist
+export type { IconName } from "./icons";
+
 // ============================================================
 // Resource taxonomy (PRD §1.9)
 // ============================================================

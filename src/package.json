@@ -13,6 +13,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@radix-ui/react-slot": "1.2.4",
     "@zoeplane/shared-types": "workspace:*"
   },
   "devDependencies": {
