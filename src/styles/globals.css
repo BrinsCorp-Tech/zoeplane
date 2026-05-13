@@ -15,15 +15,9 @@
 
 /* Tailwind v4 CSS-first directives */
 @import "tailwindcss";
-
-/* ---- Baseline reset ---- */
-*,
-*::before,
-*::after {
-  box-sizing: border-box;
-  margin: 0;
-  padding: 0;
-}
+/* Wire the JS config so semantic color utilities (bg-input, border-border, etc.) generate.
+   Without @config, Tailwind v4 does NOT auto-discover tailwind.config.ts. */
+@config "../tailwind.config.ts";
 
 html {
   font-size: 100%; /* 16px base; fluid type uses rem + vw via clamp() */

@@ -161,7 +161,7 @@ const ModalContent = React.forwardRef<
             "w-[calc(100vw-var(--space-8,2rem))]",
             SIZE_MAP[size],
             // Surface
-            "border-border bg-surface-overlay grid gap-0 rounded-lg border shadow-lg",
+            "border-border bg-surface-overlay flex flex-col rounded-lg border shadow-lg",
             // Max-height with sticky header/footer — body scrolls
             "max-h-[calc(100vh-var(--space-16,4rem))]",
             // A-07 open: fade + scale 0.96→1.0 over 200ms

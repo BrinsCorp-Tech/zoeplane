@@ -31,6 +31,7 @@ import {
   Loader2,
   Lock,
   Menu,
+  Minus,
   MoreHorizontal,
   Network,
   Pause,
@@ -77,6 +78,7 @@ const ICON_MAP: Record<IconName, React.ComponentType<LucideProps>> = {
   "refresh-cw": RefreshCw,
   search: Search,
   filter: Filter,
+  minus: Minus,
   // Navigation
   "chevron-up": ChevronUp,
   "chevron-down": ChevronDown,

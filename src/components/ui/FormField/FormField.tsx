@@ -11,6 +11,7 @@ interface FormFieldContextValue {
   errorId: string;
   required: boolean;
   error: string | undefined;
+  groupRole?: "radiogroup";
 }
 
 const FormFieldContext = React.createContext<FormFieldContextValue | null>(null);
@@ -42,6 +43,16 @@ export interface FormFieldProps {
    * - `inline`: label-left, control-right (compact rows in Settings panes).
    */
   layout?: "stacked" | "inline";
+  /**
+   * When set to "radiogroup", FormField renders <fieldset> instead of <div>
+   * and FormLabel renders as <legend> instead of <label htmlFor>.
+   * Use for group-semantic primitives (RadioGroup, future ToggleGroup).
+   * The controlId is still injected onto the child via FormControl Slot
+   * (lands on the RadioGroup root, where aria-describedby applies).
+   *
+   * @see docs/design/components/Radio-spec.md §4 for the canonical consumer example.
+   */
+  groupRole?: "radiogroup";
   className?: string;
   children: React.ReactNode;
 }
@@ -59,6 +70,7 @@ function FormField({
   required = false,
   error,
   layout = "stacked",
+  groupRole,
   className,
   children,
 }: FormFieldProps) {
@@ -68,52 +80,81 @@ function FormField({
   const errorId = `${stem}-error`;
 
   const ctx = React.useMemo<FormFieldContextValue>(
-    () => ({ controlId, helperId, errorId, required, error }),
-    [controlId, helperId, errorId, required, error],
+    () => ({ controlId, helperId, errorId, required, error, groupRole }),
+    [controlId, helperId, errorId, required, error, groupRole],
   );
+
+  const layoutClasses =
+    layout === "stacked"
+      ? "flex flex-col gap-[var(--space-1_5,0.375rem)]"
+      : "grid grid-cols-[auto_1fr] items-center gap-x-3 gap-y-[var(--space-1_5,0.375rem)]";
 
   return (
     <FormFieldContext.Provider value={ctx}>
-      <div
-        className={cn(
-          layout === "stacked"
-            ? "flex flex-col gap-[var(--space-1_5,0.375rem)]"
-            : "grid grid-cols-[auto_1fr] items-center gap-x-3 gap-y-[var(--space-1_5,0.375rem)]",
-          className,
-        )}
-      >
-        {children}
-      </div>
+      {groupRole === "radiogroup" ? (
+        // <fieldset> semantics for group primitives (RadioGroup, future ToggleGroup).
+        // border-0 p-0 m-0 resets browser default fieldset chrome.
+        // min-w-0 overrides fieldset's default min-width: min-content (breaks flex children).
+        <fieldset className={cn("m-0 min-w-0 border-0 p-0", layoutClasses, className)}>
+          {children}
+        </fieldset>
+      ) : (
+        <div className={cn(layoutClasses, className)}>{children}</div>
+      )}
     </FormFieldContext.Provider>
   );
 }
 
 // ─── FormLabel ────────────────────────────────────────────────────────────────
 
-export type FormLabelProps = React.LabelHTMLAttributes<HTMLLabelElement>;
+export type FormLabelProps = React.LabelHTMLAttributes<HTMLLabelElement> &
+  React.HTMLAttributes<HTMLLegendElement>;
+
+const LABEL_CLASSES = "text-foreground text-sm leading-none font-medium";
+
+function RequiredMarker() {
+  return (
+    <span className="text-danger ml-0.5" aria-hidden="true">
+      {" "}
+      *
+    </span>
+  );
+}
 
 /**
  * FormLabel — visible label associated with the FormControl slot.
  * Automatically renders the required * marker when FormField has required=true.
+ *
+ * When the enclosing FormField has groupRole="radiogroup", renders as <legend>
+ * (labels the parent <fieldset>) instead of <label htmlFor>. This is the
+ * correct semantic for group primitives like RadioGroup.
  */
-const FormLabel = React.forwardRef<HTMLLabelElement, FormLabelProps>(
+const FormLabel = React.forwardRef<HTMLLabelElement | HTMLLegendElement, FormLabelProps>(
   ({ className, children, ...props }, ref) => {
-    const { controlId, required } = useFormFieldContext();
+    const { controlId, required, groupRole } = useFormFieldContext();
+
+    if (groupRole === "radiogroup") {
+      return (
+        <legend
+          ref={ref as React.Ref<HTMLLegendElement>}
+          className={cn(LABEL_CLASSES, className)}
+          {...(props as React.HTMLAttributes<HTMLLegendElement>)}
+        >
+          {children}
+          {required && <RequiredMarker />}
+        </legend>
+      );
+    }
 
     return (
       <label
-        ref={ref}
+        ref={ref as React.Ref<HTMLLabelElement>}
         htmlFor={controlId}
-        className={cn("text-foreground text-sm leading-none font-medium", className)}
-        {...props}
+        className={cn(LABEL_CLASSES, className)}
+        {...(props as React.LabelHTMLAttributes<HTMLLabelElement>)}
       >
         {children}
-        {required && (
-          <span className="text-danger ml-0.5" aria-hidden="true">
-            {" "}
-            *
-          </span>
-        )}
+        {required && <RequiredMarker />}
       </label>
     );
   },
