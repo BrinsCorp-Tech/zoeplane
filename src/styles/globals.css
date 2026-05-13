@@ -12,6 +12,7 @@
 
 @import "./tokens.css";
 @import "./typography.css";
+@import "./grids.css";
 
 /* Tailwind v4 CSS-first directives */
 @import "tailwindcss";

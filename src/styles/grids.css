@@ -1,0 +1,29 @@
+/*
+ * ZoePlane — Shared grid utility classes
+ *
+ * Extracted here so that LibraryShell (component) and RouteSkeleton (loading
+ * placeholder) reference the EXACT same grid declaration — byte-identical means
+ * the swap from RouteSkeleton → populated LibraryShell is CLS = 0.
+ *
+ * Load order: imported via globals.css before component styles.
+ *
+ * Ref: LibraryShell-spec.md §6 (grid declaration)
+ *      LoadingSkeletons-spec.md §9 edge case "RouteSkeleton's grid count drift vs LibraryShell"
+ */
+
+/**
+ * .library-shell-grid
+ *
+ * The canonical card-grid layout used by LibraryShell's card container AND
+ * RouteSkeleton's 12-placeholder grid. `auto-fill` (NOT `auto-fit`) is
+ * deliberate — `auto-fit` would stretch sparse cards to fill a row, violating
+ * the 240×140 canonical card dimension. `auto-fill` keeps cards at min-width
+ * and leaves empty grid tracks.
+ *
+ * Ref: LibraryShell-spec.md §6 "The exact CSS Grid declaration (load-bearing)"
+ */
+.library-shell-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: var(--space-4);
+}

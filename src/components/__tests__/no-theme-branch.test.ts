@@ -57,6 +57,13 @@ const EXCLUDED_FILES = new Set([
   // test's intent is to prevent COMPONENT files from branching on theme; story
   // files used for visual contrast verification are explicitly permitted.
   join(COMPONENTS_DIR, "ui", "Skeleton", "Skeleton.stories.tsx"),
+  // Story 2.11 skeleton variant + LibraryShell stories — same exemption rationale
+  // as Skeleton.stories.tsx: ThemeContrast stories use static data-theme wrappers
+  // as Storybook side-by-side visual contrast panels (not runtime JSX branching).
+  join(COMPONENTS_DIR, "ui", "Skeleton", "CardSkeleton.stories.tsx"),
+  join(COMPONENTS_DIR, "ui", "Skeleton", "RouteSkeleton.stories.tsx"),
+  join(COMPONENTS_DIR, "ui", "Skeleton", "StreamSkeleton.stories.tsx"),
+  join(COMPONENTS_DIR, "library-shell", "LibraryShell.stories.tsx"),
 ]);
 
 /** Directories that are excluded from scanning (test files may reference these patterns). */

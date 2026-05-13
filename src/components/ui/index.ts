@@ -151,6 +151,17 @@ export { Spinner, type SpinnerProps, type SpinnerSize } from "./Spinner/Spinner"
 // Skeleton — theme-aware Category-C2 placeholder primitive (Batch G)
 export { Skeleton, type SkeletonProps, type SkeletonVariant } from "./Skeleton/Skeleton";
 
+// ─── Story 2.11 — Loading skeleton variants (C2 / C3) ─────────────────────────
+
+// CardSkeleton — single-card C2 placeholder (composes Skeleton; used by LibraryShell loading state)
+export { CardSkeleton, type CardSkeletonProps } from "./Skeleton/CardSkeleton";
+
+// RouteSkeleton — full-route C2 placeholder (header + toolbar + 12-card grid)
+export { RouteSkeleton, type RouteSkeletonProps } from "./Skeleton/RouteSkeleton";
+
+// StreamSkeleton — C3 pre-first-token streaming placeholder (Epic 07 Task Console)
+export { StreamSkeleton, type StreamSkeletonProps } from "./Skeleton/StreamSkeleton";
+
 // ─── Story 2.7 — EvaluatorStatusBadge (P0 type-signature freeze) ─────────────
 
 // EvaluatorStatusBadge — cross-library evaluator/validity state badge (Story 2.7)
