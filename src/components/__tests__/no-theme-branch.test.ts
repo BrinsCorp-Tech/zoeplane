@@ -50,6 +50,20 @@ const EXCLUDED_FILES = new Set([
   // conditional rendering or classNames. The third-party Sonner library has no
   // knowledge of ZoePlane's data-theme attribute, so the prop must be explicit.
   join(COMPONENTS_DIR, "ui", "Toast", "Toast.tsx"),
+  // Skeleton.stories.tsx uses data-theme="dark" and data-theme="light" as static
+  // attributes on wrapper <div>s in the ThemeContrast story to create a
+  // side-by-side visual-regression / theme-contrast panel in Storybook. This is a
+  // story-level visualization concern (not component-level theme branching). The
+  // test's intent is to prevent COMPONENT files from branching on theme; story
+  // files used for visual contrast verification are explicitly permitted.
+  join(COMPONENTS_DIR, "ui", "Skeleton", "Skeleton.stories.tsx"),
+  // Story 2.11 skeleton variant + LibraryShell stories — same exemption rationale
+  // as Skeleton.stories.tsx: ThemeContrast stories use static data-theme wrappers
+  // as Storybook side-by-side visual contrast panels (not runtime JSX branching).
+  join(COMPONENTS_DIR, "ui", "Skeleton", "CardSkeleton.stories.tsx"),
+  join(COMPONENTS_DIR, "ui", "Skeleton", "RouteSkeleton.stories.tsx"),
+  join(COMPONENTS_DIR, "ui", "Skeleton", "StreamSkeleton.stories.tsx"),
+  join(COMPONENTS_DIR, "library-shell", "LibraryShell.stories.tsx"),
 ]);
 
 /** Directories that are excluded from scanning (test files may reference these patterns). */
