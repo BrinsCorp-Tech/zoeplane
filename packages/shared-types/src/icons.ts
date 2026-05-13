@@ -56,6 +56,10 @@ export type IconName =
   | "pause"
   | "circle-dot"
   | "x-circle"
+  // Status — EvaluatorStatusBadge additions (Story 2.7, operator-approved 2026-05-13)
+  | "clock" // evaluator-status "pending review" (evaluator); validity-only "pending"
+  | "x-octagon" // "declined" state (semantic-stronger than x-circle for hard-declined)
+  | "power" // hook "disabled by you" (user-toggled off)
   // Domain
   | "terminal"
   | "git-branch"

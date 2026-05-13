@@ -150,3 +150,16 @@ export { Spinner, type SpinnerProps, type SpinnerSize } from "./Spinner/Spinner"
 
 // Skeleton — theme-aware Category-C2 placeholder primitive (Batch G)
 export { Skeleton, type SkeletonProps, type SkeletonVariant } from "./Skeleton/Skeleton";
+
+// ─── Story 2.7 — EvaluatorStatusBadge (P0 type-signature freeze) ─────────────
+
+// EvaluatorStatusBadge — cross-library evaluator/validity state badge (Story 2.7)
+// Type signature FROZEN until v1.0.0 — changes require an ADR per AC #8.
+export {
+  EvaluatorStatusBadge,
+  type EvaluatorStatusBadgeProps,
+  type SkillEvaluatorState,
+  type AgentEvaluatorState,
+  type HookEvaluatorState,
+  type ValidityState,
+} from "./EvaluatorStatusBadge/EvaluatorStatusBadge";

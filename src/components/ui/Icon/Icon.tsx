@@ -14,6 +14,7 @@ import {
   ChevronRight,
   ChevronUp,
   CircleDot,
+  Clock,
   Copy,
   Database,
   Edit,
@@ -37,6 +38,7 @@ import {
   Pause,
   Play,
   Plus,
+  Power,
   RefreshCw,
   Save,
   Search,
@@ -46,6 +48,7 @@ import {
   Unlock,
   X,
   XCircle,
+  XOctagon,
   type LucideProps,
 } from "lucide-react";
 import type { IconName } from "@zoeplane/shared-types";
@@ -111,6 +114,10 @@ const ICON_MAP: Record<IconName, React.ComponentType<LucideProps>> = {
   pause: Pause,
   "circle-dot": CircleDot,
   "x-circle": XCircle,
+  // Status — EvaluatorStatusBadge additions (Story 2.7, operator-approved 2026-05-13)
+  clock: Clock, // evaluator-status "pending review"; validity-only "pending"
+  "x-octagon": XOctagon, // "declined" — semantic-stronger than x-circle
+  power: Power, // hook "disabled by you" (user-toggled off)
   // Domain
   terminal: Terminal,
   "git-branch": GitBranch,
