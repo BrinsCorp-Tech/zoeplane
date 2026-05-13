@@ -142,3 +142,11 @@ export {
   type TabProps,
   type TabPanelProps,
 } from "./Tabs/Tabs";
+
+// ─── Batch G — Foundation tier P0 final (Story 2.6) ──────────────────────────
+
+// Spinner — CSS-only indeterminate rotational loading indicator (Batch G)
+export { Spinner, type SpinnerProps, type SpinnerSize } from "./Spinner/Spinner";
+
+// Skeleton — theme-aware Category-C2 placeholder primitive (Batch G)
+export { Skeleton, type SkeletonProps, type SkeletonVariant } from "./Skeleton/Skeleton";
