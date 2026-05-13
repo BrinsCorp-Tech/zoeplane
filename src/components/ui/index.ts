@@ -96,3 +96,49 @@ export {
 
 // Toast — transient notification surface (Batch E)
 export { Toaster, toast, type ToastOptions } from "./Toast/Toast";
+
+// ─── Batch F — Foundation tier P0 (Story 2.6) ────────────────────────────────
+
+// Select — single-select value-picker (Batch F)
+export {
+  SelectRoot,
+  SelectGroup,
+  SelectValue,
+  SelectIcon,
+  SelectTrigger,
+  SelectScrollUpButton,
+  SelectScrollDownButton,
+  SelectContent,
+  SelectLabel,
+  SelectItem,
+  SelectItemIndicator,
+  SelectSeparator,
+  type SelectTriggerProps,
+  type SelectContentProps,
+  type SelectTriggerSize,
+} from "./Select/Select";
+
+// Checkbox — boolean-toggle with three-state support (Batch F)
+export { Checkbox, type CheckboxProps } from "./Checkbox/Checkbox";
+
+// Radio — mutually-exclusive selection group (Batch F)
+export {
+  RadioGroup,
+  RadioGroupItem,
+  RadioGroupIndicator,
+  type RadioGroupProps,
+  type RadioGroupItemProps,
+} from "./Radio/Radio";
+
+// Tabs — horizontal tab navigation surface (Batch F)
+export {
+  TabsRoot,
+  TabsList,
+  Tab,
+  TabPanel,
+  type TabsVariant,
+  type TabsSize,
+  type TabsListProps,
+  type TabProps,
+  type TabPanelProps,
+} from "./Tabs/Tabs";

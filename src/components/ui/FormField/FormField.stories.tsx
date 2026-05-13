@@ -176,6 +176,54 @@ export const MultiFieldForm: Story = {
   },
 };
 
+// ─── RadioGroupComposition ────────────────────────────────────────────────────
+
+/**
+ * Demonstrates groupRole="radiogroup" — FormField renders <fieldset> and
+ * FormLabel renders as <legend>. The addon-a11y panel should show the group
+ * label correctly associated with the radiogroup role.
+ */
+export const RadioGroupComposition: Story = {
+  name: "RadioGroupComposition (groupRole=radiogroup)",
+  render: () => {
+    const [value, setValue] = useState("project");
+    return (
+      <div className="w-80">
+        <FormField required groupRole="radiogroup">
+          <FormLabel>Scope for this edit</FormLabel>
+          <FormControl asChild>
+            <div role="radiogroup" aria-label="Scope for this edit" className="flex flex-col gap-3">
+              <label className="inline-flex cursor-pointer items-center gap-2">
+                <input
+                  type="radio"
+                  name="scope"
+                  value="project"
+                  checked={value === "project"}
+                  onChange={() => setValue("project")}
+                  className="accent-[var(--color-accent)]"
+                />
+                <span>Project (recommended)</span>
+              </label>
+              <label className="inline-flex cursor-pointer items-center gap-2">
+                <input
+                  type="radio"
+                  name="scope"
+                  value="global"
+                  checked={value === "global"}
+                  onChange={() => setValue("global")}
+                  className="accent-[var(--color-accent)]"
+                />
+                <span>Global</span>
+              </label>
+            </div>
+          </FormControl>
+          <FormHelperText>Choose where the skill file should be saved.</FormHelperText>
+        </FormField>
+      </div>
+    );
+  },
+};
+
 // ─── ReducedMotion ────────────────────────────────────────────────────────────
 
 export const ReducedMotion: Story = {
