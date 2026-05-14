@@ -77,7 +77,7 @@ Storybook 8 + Chromatic installation land in **Story 2.4**. Every component stor
 
 **Negative:**
 
-- Custom Style Dictionary formatter means the formatted CSS output is authored in JavaScript, not templated in DTCG JSON. Consequence: non-color tokens (typography, spacing, motion, layout) are static in the formatter rather than driven from JSON. This is an accepted tradeoff for semantic equivalence with the hand-authored file; the plan is to migrate these layers to JSON in a later sprint when Figma Variables are authored for typography and spacing.
+- Custom Style Dictionary formatter means the formatted CSS output is authored in JavaScript, not templated in DTCG JSON. Consequence: non-color tokens (typography, spacing, layout) are static in the formatter rather than driven from JSON. This is an accepted tradeoff for semantic equivalence with the hand-authored file; the plan is to migrate these layers to JSON in a later sprint when Figma Variables are authored for typography and spacing. **Motion tokens fulfilled (Story 2.12, 2026-05-14):** The 6 motion primitive tokens (`--motion-duration-fast/base/slow`, `--motion-easing-standard/decelerate/accelerate`) were added to `tokens.seed.json` and emitted by the Style Dictionary pipeline as part of the animation library — motion is now JSON-driven, ahead of the typography/spacing migration.
 - shadcn/ui's default CSS variable names conflict with ZoePlane's token namespace. Every component from shadcn must be adapted. This is expected effort; the component migration guide will be added to the sprint-context for Epic 02 component stories.
 - Chromatic requires a project token (GHA secret). This is a deployment concern, not a code concern, and is listed in the Sprint 2 carryover GHA secrets checklist.
 

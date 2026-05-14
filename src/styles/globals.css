@@ -11,6 +11,7 @@
  */
 
 @import "./tokens.css";
+@import "./animations.css";
 @import "./typography.css";
 @import "./grids.css";
 
@@ -122,7 +123,7 @@ button:disabled {
 }
 
 /* ---- Reduced-motion: disable ALL animations as a safety net ----
-   Individual components use CSS vars (--duration-*) which zero out via
+   Individual components use CSS vars (--motion-duration-*) which zero out via
    the tokens.css @media block. This rule catches any hardcoded transitions. */
 @media (prefers-reduced-motion: reduce) {
   *,

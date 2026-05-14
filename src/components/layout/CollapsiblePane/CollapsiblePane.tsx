@@ -3,13 +3,14 @@
  *
  * Handles:
  *   - Expand/collapse state with optional localStorage persistence
- *   - Transition animation (width or height) with reduced-motion support
+ *   - Open/close animation via Story 2.12 animation catalog classes
+ *     (animate-A-05-pane-open / animate-A-05-pane-close)
  *   - Toggle button with proper aria-expanded
  *   - Children rendered when expanded; optionally collapsed to zero width/height
  *
  * Per Story 2.9 Technical Notes: Sidebar and Inspector both use this
- * primitive to share collapse behaviour. Reduced-motion is handled here
- * once, via `@media (prefers-reduced-motion: reduce)`.
+ * primitive to share collapse behaviour. Reduced-motion is handled by
+ * animations.css (A-05 strategy B — animation: none).
  *
  * The pane renders a fixed-width/height container that collapses to 0.
  * Direction: "horizontal" (width collapse — for Sidebar/Inspector) or
@@ -89,7 +90,9 @@ function writeStorage(key: string, value: boolean): void {
 
 /**
  * CollapsiblePane — animate-in/out pane with localStorage persistence.
- * Reduced-motion: transition-duration collapses to 0ms via CSS media query.
+ * Open/close animations: animate-A-05-pane-open / animate-A-05-pane-close
+ * (Story 2.12 catalog). Reduced-motion: handled by animations.css A-05
+ * overrides (animation: none — instant per ux-spec §5.1).
  */
 export function CollapsiblePane({
   defaultCollapsed = false,
@@ -109,15 +112,24 @@ export function CollapsiblePane({
     return defaultCollapsed;
   });
 
+  // Track previous collapsed state to choose open vs close animation class.
+  const prevCollapsed = React.useRef(collapsed);
+  const [animClass, setAnimClass] = React.useState<string>(() =>
+    collapsed ? "animate-A-05-pane-close" : "animate-A-05-pane-open",
+  );
+
   const toggle = React.useCallback(() => {
     setCollapsed((prev) => {
       const next = !prev;
       if (storageKey) writeStorage(storageKey, next);
+      // Update animation class: opening → pane-open; closing → pane-close
+      setAnimClass(next ? "animate-A-05-pane-close" : "animate-A-05-pane-open");
+      prevCollapsed.current = next;
       return next;
     });
   }, [storageKey]);
 
-  // Horizontal pane: width transitions; vertical: height transitions.
+  // Horizontal pane: width collapses; vertical: height collapses.
   const sizeProperty = direction === "horizontal" ? "width" : "height";
   const overflowProperty = direction === "horizontal" ? "overflowX" : "overflowY";
 
@@ -125,29 +137,13 @@ export function CollapsiblePane({
     [sizeProperty]: collapsed ? "0" : expandedSize,
     overflow: "hidden",
     [overflowProperty]: "hidden",
-    // Transition — zeroed by the reduced-motion media query in <style> below.
-    transition: `${sizeProperty} 200ms ease`,
     flexShrink: 0,
   };
 
   return (
     <>
-      {/*
-       * Inline reduced-motion override.
-       * Done inline (rather than a global CSS rule) so each CollapsiblePane
-       * instance is self-contained. Story 2.12 animation library will replace
-       * this pattern when it ships.
-       */}
-      <style>{`
-        @media (prefers-reduced-motion: reduce) {
-          .collapsible-pane-container {
-            transition-duration: 0ms !important;
-          }
-        }
-      `}</style>
-
       <div
-        className={cn("collapsible-pane-container", className)}
+        className={cn("collapsible-pane-container", animClass, className)}
         style={containerStyle}
         role={role}
         aria-label={ariaLabel}

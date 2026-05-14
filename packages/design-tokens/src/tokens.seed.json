@@ -72,5 +72,17 @@
       "compact-muted": { "$value": "oklch(0.950 0.040 60)", "$type": "color" },
       "compact-muted-dark": { "$value": "oklch(0.260 0.060 60)", "$type": "color" }
     }
+  },
+  "motion": {
+    "duration": {
+      "fast": { "$value": "120ms", "$type": "duration" },
+      "base": { "$value": "200ms", "$type": "duration" },
+      "slow": { "$value": "400ms", "$type": "duration" }
+    },
+    "easing": {
+      "standard": { "$value": "cubic-bezier(0.4, 0, 0.2, 1)", "$type": "cubicBezier" },
+      "decelerate": { "$value": "cubic-bezier(0, 0, 0.2, 1)", "$type": "cubicBezier" },
+      "accelerate": { "$value": "cubic-bezier(0.4, 0, 1, 1)", "$type": "cubicBezier" }
+    }
   }
 }
