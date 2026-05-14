@@ -22,6 +22,7 @@
     "@radix-ui/react-tabs": "1.1.13",
     "@radix-ui/react-tooltip": "1.2.8",
     "@zoeplane/shared-types": "workspace:*",
+    "cmdk": "^1.0.0",
     "next-themes": "0.4.6",
     "sonner": "2.0.7"
   },

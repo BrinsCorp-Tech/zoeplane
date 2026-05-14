@@ -20,23 +20,17 @@ export type { IconName } from "./icons";
 // ============================================================
 
 /** The six first-class resource kinds tracked by ZoePlane. */
-export type ResourceKind =
-  | "skill"
-  | "agent"
-  | "command"
-  | "team"
-  | "workflow"
-  | "hook";
+export type ResourceKind = "skill" | "agent" | "command" | "team" | "workflow" | "hook";
 
 /** Scope of a resource — where it lives on disk. */
 export type ResourceScope = "global" | "project" | "local";
 
 /** Base fields shared by all resource kinds. */
 export interface BaseResource {
-  id: string;            // Stable hash of (kind + diskPath)
+  id: string; // Stable hash of (kind + diskPath)
   kind: ResourceKind;
   name: string;
-  diskPath: string;      // Absolute path to the source file
+  diskPath: string; // Absolute path to the source file
   scope: ResourceScope;
   lastModifiedAt: string; // ISO 8601
   validityStatus: "valid" | "warnings" | "invalid";
@@ -72,13 +66,13 @@ export type EvaluatorStatus =
  * with the appropriate framing (e.g., Content-Length headers for JSON-RPC over stdio).
  */
 export interface IpcMessage<T = unknown> {
-  id: string;      // Request correlation ID (UUID)
-  method: string;  // e.g., "indexer.watch_path", "task.spawn"
+  id: string; // Request correlation ID (UUID)
+  method: string; // e.g., "indexer.watch_path", "task.spawn"
   params?: T;
 }
 
 export interface IpcResponse<T = unknown> {
-  id: string;      // Matches the request ID
+  id: string; // Matches the request ID
   result?: T;
   error?: IpcError;
 }
@@ -102,7 +96,7 @@ export interface IpcError {
 export interface RunEvent {
   taskId: string;
   agentId: string;
-  sequence: number;  // monotonically increasing per task
+  sequence: number; // monotonically increasing per task
   timestamp: string; // ISO 8601
   type: RunEventType;
   payload: unknown;
@@ -118,6 +112,12 @@ export type RunEventType =
   | "agent.cancelled"
   | "task.completed"
   | "task.errored";
+
+// ============================================================
+// Project context (architect contract 2026-05-14)
+// ============================================================
+
+export type { ProjectContext, ProjectOpenEvent, ProjectCloseEvent } from "./project";
 
 // ============================================================
 // User preferences
