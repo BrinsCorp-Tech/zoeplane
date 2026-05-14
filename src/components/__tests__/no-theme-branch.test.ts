@@ -64,6 +64,21 @@ const EXCLUDED_FILES = new Set([
   join(COMPONENTS_DIR, "ui", "Skeleton", "RouteSkeleton.stories.tsx"),
   join(COMPONENTS_DIR, "ui", "Skeleton", "StreamSkeleton.stories.tsx"),
   join(COMPONENTS_DIR, "library-shell", "LibraryShell.stories.tsx"),
+  // Sprint 2 Wave 2 layout-tier stories — same exemption rationale as the
+  // Skeleton family + LibraryShell: ThemeContrast / dark-theme variants are
+  // Storybook visual-regression panels using static `data-theme` wrappers
+  // (not runtime JSX branching in production components). Stories 2.8 + 2.9 +
+  // 2.10 ship light + dark snapshot pairs for Chromatic per AC #8 / #10 / #10.
+  join(COMPONENTS_DIR, "layout", "CollapsiblePane", "CollapsiblePane.stories.tsx"),
+  join(COMPONENTS_DIR, "layout", "Sidebar", "Sidebar.stories.tsx"),
+  join(COMPONENTS_DIR, "layout", "Inspector", "Inspector.stories.tsx"),
+  join(COMPONENTS_DIR, "layout", "TitleBar", "TitleBar.stories.tsx"),
+  join(COMPONENTS_DIR, "layout", "StatusBar", "StatusBar.stories.tsx"),
+  join(COMPONENTS_DIR, "layout", "TabStrip", "TabStrip.stories.tsx"),
+  join(COMPONENTS_DIR, "layout", "PrimaryWorkArea", "PrimaryWorkArea.stories.tsx"),
+  join(COMPONENTS_DIR, "layout", "HostShell", "HostShell.stories.tsx"),
+  join(COMPONENTS_DIR, "layout", "CommandPalette", "CommandPalette.stories.tsx"),
+  join(COMPONENTS_DIR, "layout", "NotificationsCenter", "NotificationsCenter.stories.tsx"),
 ]);
 
 /** Directories that are excluded from scanning (test files may reference these patterns). */
