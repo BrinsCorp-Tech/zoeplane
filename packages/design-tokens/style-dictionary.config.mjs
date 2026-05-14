@@ -20,10 +20,10 @@
  * hand-authored canonical file (490 lines) that this pipeline replaces.
  */
 
-import StyleDictionary from 'style-dictionary';
-import { readFileSync } from 'fs';
-import { fileURLToPath } from 'url';
-import { dirname, resolve } from 'path';
+import StyleDictionary from "style-dictionary";
+import { readFileSync } from "fs";
+import { fileURLToPath } from "url";
+import { dirname, resolve } from "path";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
@@ -32,17 +32,17 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 // ---------------------------------------------------------------------------
 
 StyleDictionary.registerFormat({
-  name: 'zoeplaneTokensCSS',
+  name: "zoeplaneTokensCSS",
   format: function ({ dictionary }) {
     // Pull primitive color values from the dictionary so they stay in sync
     // with tokens.seed.json. Everything else is authored here directly.
     const tok = (path) => {
-      const token = dictionary.allTokens.find((t) => t.path.join('.') === path);
+      const token = dictionary.allTokens.find((t) => t.path.join(".") === path);
       if (!token) {
         throw new Error(`[style-dictionary] Missing token: ${path} — check tokens.seed.json`);
       }
       // Style Dictionary v4 with DTCG tokens uses $value (not value)
-      return token['$value'] ?? token.value;
+      return token["$value"] ?? token.value;
     };
 
     return `/*
@@ -71,56 +71,56 @@ StyleDictionary.registerFormat({
 @layer tokens.base {
   :root {
     /* ---- Neutrals — single ramp; both themes pull from this ---- */
-    --gray-50:   ${tok('color.gray.50')};
-    --gray-100:  ${tok('color.gray.100')};
-    --gray-200:  ${tok('color.gray.200')};
-    --gray-300:  ${tok('color.gray.300')};
-    --gray-400:  ${tok('color.gray.400')};
-    --gray-500:  ${tok('color.gray.500')};
-    --gray-600:  ${tok('color.gray.600')};
-    --gray-700:  ${tok('color.gray.700')};
-    --gray-800:  ${tok('color.gray.800')};
-    --gray-850:  ${tok('color.gray.850')};
-    --gray-900:  ${tok('color.gray.900')};
-    --gray-950:  ${tok('color.gray.950')};
-    --gray-975:  ${tok('color.gray.975')};
+    --gray-50:   ${tok("color.gray.50")};
+    --gray-100:  ${tok("color.gray.100")};
+    --gray-200:  ${tok("color.gray.200")};
+    --gray-300:  ${tok("color.gray.300")};
+    --gray-400:  ${tok("color.gray.400")};
+    --gray-500:  ${tok("color.gray.500")};
+    --gray-600:  ${tok("color.gray.600")};
+    --gray-700:  ${tok("color.gray.700")};
+    --gray-800:  ${tok("color.gray.800")};
+    --gray-850:  ${tok("color.gray.850")};
+    --gray-900:  ${tok("color.gray.900")};
+    --gray-950:  ${tok("color.gray.950")};
+    --gray-975:  ${tok("color.gray.975")};
 
     /* ---- Brand accent — hue 260 (brand blue) ---- */
-    --accent-50:  ${tok('color.accent.50')};
-    --accent-100: ${tok('color.accent.100')};
-    --accent-200: ${tok('color.accent.200')};
-    --accent-400: ${tok('color.accent.400')};
-    --accent-500: ${tok('color.accent.500')};
-    --accent-600: ${tok('color.accent.600')};
-    --accent-700: ${tok('color.accent.700')};
-    --accent-800: ${tok('color.accent.800')};
+    --accent-50:  ${tok("color.accent.50")};
+    --accent-100: ${tok("color.accent.100")};
+    --accent-200: ${tok("color.accent.200")};
+    --accent-400: ${tok("color.accent.400")};
+    --accent-500: ${tok("color.accent.500")};
+    --accent-600: ${tok("color.accent.600")};
+    --accent-700: ${tok("color.accent.700")};
+    --accent-800: ${tok("color.accent.800")};
 
     /* ---- Status primitives ---- */
-    --success-400: ${tok('color.success.400')};
-    --success-500: ${tok('color.success.500')};
-    --success-600: ${tok('color.success.600')};
+    --success-400: ${tok("color.success.400")};
+    --success-500: ${tok("color.success.500")};
+    --success-600: ${tok("color.success.600")};
 
-    --warn-400: ${tok('color.warn.400')};
-    --warn-500: ${tok('color.warn.500')};
-    --warn-600: ${tok('color.warn.600')};
+    --warn-400: ${tok("color.warn.400")};
+    --warn-500: ${tok("color.warn.500")};
+    --warn-600: ${tok("color.warn.600")};
 
-    --danger-400: ${tok('color.danger.400')};
-    --danger-500: ${tok('color.danger.500')};
-    --danger-600: ${tok('color.danger.600')};
+    --danger-400: ${tok("color.danger.400")};
+    --danger-500: ${tok("color.danger.500")};
+    --danger-600: ${tok("color.danger.600")};
 
     /* ---- Info — hue 220 (NEW v1.1, distinct from accent 260)
        Used for Soft Notification "pending review" hooks.
        40 hue-degrees away from accent so badge ≠ "Review" CTA button. ---- */
-    --info-400: ${tok('color.info.400')};
-    --info-500: ${tok('color.info.500')};
-    --info-600: ${tok('color.info.600')};
+    --info-400: ${tok("color.info.400")};
+    --info-500: ${tok("color.info.500")};
+    --info-600: ${tok("color.info.600")};
 
     /* ---- Quarantine — hue 320 (NEW v1.1, "purple-amber" composite)
        Strict Mode quarantined hooks. Distinct from warn (75), danger (25), accent (260).
        Signals "held/blocked" without the urgency of red. ---- */
-    --quarantine-400: ${tok('color.quarantine.400')};
-    --quarantine-500: ${tok('color.quarantine.500')};
-    --quarantine-600: ${tok('color.quarantine.600')};
+    --quarantine-400: ${tok("color.quarantine.400")};
+    --quarantine-500: ${tok("color.quarantine.500")};
+    --quarantine-600: ${tok("color.quarantine.600")};
 
     /* ---- Event-family hues (NEW v1.1) — HookCard event chips
        De-saturated (chroma 0.06–0.10) so chip reads as category label, not status.
@@ -129,21 +129,21 @@ StyleDictionary.registerFormat({
          session family (SessionStart / Stop / SubagentStop) — hue 160 (teal)
          prompt family  (UserPromptSubmit / Notification) — hue 280 (violet)
          compact family (PreCompact, singleton) — hue 60 (warm khaki) ---- */
-    --event-family-tool-500:         ${tok('color.event-family.tool-500')};
-    --event-family-tool-muted:       ${tok('color.event-family.tool-muted')};
-    --event-family-tool-muted-dark:  ${tok('color.event-family.tool-muted-dark')};
+    --event-family-tool-500:         ${tok("color.event-family.tool-500")};
+    --event-family-tool-muted:       ${tok("color.event-family.tool-muted")};
+    --event-family-tool-muted-dark:  ${tok("color.event-family.tool-muted-dark")};
 
-    --event-family-session-500:          ${tok('color.event-family.session-500')};
-    --event-family-session-muted:        ${tok('color.event-family.session-muted')};
-    --event-family-session-muted-dark:   ${tok('color.event-family.session-muted-dark')};
+    --event-family-session-500:          ${tok("color.event-family.session-500")};
+    --event-family-session-muted:        ${tok("color.event-family.session-muted")};
+    --event-family-session-muted-dark:   ${tok("color.event-family.session-muted-dark")};
 
-    --event-family-prompt-500:          ${tok('color.event-family.prompt-500')};
-    --event-family-prompt-muted:        ${tok('color.event-family.prompt-muted')};
-    --event-family-prompt-muted-dark:   ${tok('color.event-family.prompt-muted-dark')};
+    --event-family-prompt-500:          ${tok("color.event-family.prompt-500")};
+    --event-family-prompt-muted:        ${tok("color.event-family.prompt-muted")};
+    --event-family-prompt-muted-dark:   ${tok("color.event-family.prompt-muted-dark")};
 
-    --event-family-compact-500:         ${tok('color.event-family.compact-500')};
-    --event-family-compact-muted:       ${tok('color.event-family.compact-muted')};
-    --event-family-compact-muted-dark:  ${tok('color.event-family.compact-muted-dark')};
+    --event-family-compact-500:         ${tok("color.event-family.compact-500")};
+    --event-family-compact-muted:       ${tok("color.event-family.compact-muted")};
+    --event-family-compact-muted-dark:  ${tok("color.event-family.compact-muted-dark")};
   }
 }
 
@@ -502,22 +502,20 @@ StyleDictionary.registerFormat({
    ============================================================ */
 @layer tokens.motion {
   :root {
-    --duration-fast:    100ms;
-    --duration-default: 200ms;
-    --duration-slow:    300ms;
+    --motion-duration-fast:    ${tok("motion.duration.fast")};
+    --motion-duration-base:    ${tok("motion.duration.base")};
+    --motion-duration-slow:    ${tok("motion.duration.slow")};
 
-    --ease-out:    cubic-bezier(0, 0, 0.2, 1);
-    --ease-in:     cubic-bezier(0.4, 0, 1, 1);
-    --ease-in-out: cubic-bezier(0.4, 0, 0.2, 1);
-    /* Spring easing — used sparingly (e.g., Cmd-K palette entrance) */
-    --ease-spring: cubic-bezier(0.5, 1.5, 0.5, 1);
+    --motion-easing-standard:   ${tok("motion.easing.standard")};
+    --motion-easing-decelerate: ${tok("motion.easing.decelerate")};
+    --motion-easing-accelerate: ${tok("motion.easing.accelerate")};
   }
 
   @media (prefers-reduced-motion: reduce) {
     :root {
-      --duration-fast:    0ms;
-      --duration-default: 0ms;
-      --duration-slow:    0ms;
+      --motion-duration-fast:    0ms;
+      --motion-duration-base:    0ms;
+      --motion-duration-slow:    0ms;
     }
   }
 }
@@ -543,14 +541,14 @@ StyleDictionary.registerFormat({
 // ---------------------------------------------------------------------------
 
 const sd = new StyleDictionary({
-  source: ['src/tokens.seed.json'],
+  source: ["src/tokens.seed.json"],
   platforms: {
     css: {
-      transformGroup: 'css',
+      transformGroup: "css",
       files: [
         {
-          destination: '../../src/styles/tokens.css',
-          format: 'zoeplaneTokensCSS',
+          destination: "../../src/styles/tokens.css",
+          format: "zoeplaneTokensCSS",
           options: {
             outputReferences: false,
           },
