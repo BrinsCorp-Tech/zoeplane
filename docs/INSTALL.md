@@ -71,10 +71,25 @@ Then clone and build:
 git clone https://github.com/BrinsCorp-Tech/zoeplane.git
 cd zoeplane
 bun install
+bun run tokens:build     # generate src/styles/tokens.css (gitignored artifact)
 bun run tauri:build
 ```
 
 The produced bundles land in `src-tauri/target/release/bundle/`. See `docs/BUILD-AND-RELEASE.md` for the full build procedure including Linux system dependencies.
+
+### Running Storybook (component development)
+
+The component library and animation catalog are browsable via Storybook:
+
+```bash
+git clone https://github.com/BrinsCorp-Tech/zoeplane.git
+cd zoeplane
+bun install
+bun run tokens:build     # required — tokens.css must exist before Storybook build
+bun run storybook
+```
+
+Storybook opens at `http://localhost:6006`. The global toolbar exposes a theme toggle (light/dark) and a reduced-motion toggle. All 25 Sprint 2 components (16 foundation + 9 layout) and the 41-animation catalog have stories.
 
 ## Verifying the Install
 
@@ -185,4 +200,4 @@ rm ~/Applications/ZoePlane-<version>-x86_64.AppImage
 
 ---
 
-_Last reviewed: 2026-05-09 by tech-writer agent against Sprint 1._
+_Last reviewed: 2026-05-15 by tech-writer agent against Sprint 2 (Story 2.4: Storybook install procedure; Story 2.1: tokens:build prerequisite for build-from-source)._
