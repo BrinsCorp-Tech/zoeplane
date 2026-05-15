@@ -9,12 +9,24 @@ import App from "./App";
 import { ThemeProvider } from "./components/theme/ThemeProvider";
 import { Toaster } from "./components/ui/Toast/Toast";
 import { useAppStore } from "./stores/app";
+import { useCommandPaletteStore } from "./stores/commandPalette";
+import { useNotificationsStore } from "./stores/notifications";
 import "./styles/globals.css";
 
 // Expose the store at module scope so it is accessible from the root component
 // tree (AC #2). Domain code should import useAppStore directly — this
 // reference prevents tree-shaking from eliminating the import.
 void useAppStore.getState;
+
+// DEV-mode store exposure for devtools-driven smoke testing (Story 2.22).
+// Tree-shaken in production builds — not included in shipped bundles.
+if (import.meta.env.DEV) {
+  Object.assign(window as unknown as Record<string, unknown>, {
+    useAppStore,
+    useCommandPaletteStore,
+    useNotificationsStore,
+  });
+}
 
 const queryClient = new QueryClient({
   defaultOptions: {

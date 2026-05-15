@@ -1,11 +1,7 @@
-// ZoePlane — PostCSS configuration (project root).
-// Required because Storybook runs Vite with the project root as its CWD,
-// so Vite's PostCSS discovery walks upward from project root and needs the
-// config HERE — not at src/postcss.config.js. The main app dev server
-// (bun run dev, which CDs into src/) still finds src/postcss.config.js.
-//
-// Both configs are intentionally identical. Consolidate to one location
-// in a future cleanup story.
+// ZoePlane — PostCSS configuration (single source of truth at project root).
+// Vite discovery: main app (root: "src/") walks upward and finds this file;
+// Storybook (CWD = project root) resolves it directly. Story 2.22 removed
+// the duplicate src/postcss.config.js — do not re-add it.
 
 export default {
   plugins: {
