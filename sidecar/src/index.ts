@@ -26,6 +26,14 @@ import { join } from "node:path";
 import { openDatabase } from "./db/client";
 import { runMigrations } from "./db/runner";
 import { log } from "./log";
+import {
+  startGlobalWatcher,
+  startProjectWatcher,
+  stopProjectWatcher,
+  stopWatcher,
+  subscribeToWatcherEvents,
+} from "./indexer/watcher";
+import type { WatcherEvent } from "@zoeplane/shared-types";
 
 // ---------------------------------------------------------------------------
 // CLI argument parsing — DB path (required, supplied by Tauri shell at spawn)
@@ -44,7 +52,7 @@ function parseDbPath(): string {
     log(
       "ERROR",
       "Sidecar startup failed: required argument --db-path not provided. " +
-        "The Tauri shell must resolve appDataDir() and pass it as --db-path <path>."
+        "The Tauri shell must resolve appDataDir() and pass it as --db-path <path>.",
     );
     process.exit(1);
   }
@@ -83,7 +91,7 @@ function parseMigrationsDir(): MigrationsDirResult {
     "WARN",
     "Sidecar: --migrations-dir not supplied; falling back to dev-mode path. " +
       "Production builds must supply this argument.",
-    { fallback }
+    { fallback },
   );
   return { path: fallback, isFallback: true };
 }
@@ -117,14 +125,117 @@ log("INFO", "Database ready", { dbPath });
 const server = Bun.serve({
   hostname: "127.0.0.1",
   port: 0, // kernel-assigned ephemeral port
-  fetch(req: Request): Response {
+  fetch(req: Request): Response | Promise<Response> {
     const url = new URL(req.url);
 
+    // ------------------------------------------------------------------
+    // GET /health — liveness probe (Tauri ipc.rs sidecar_status command)
+    // ------------------------------------------------------------------
     if (url.pathname === "/health" && req.method === "GET") {
-      return Response.json(
-        { status: "ok", pid: process.pid },
-        { status: 200 }
-      );
+      return Response.json({ status: "ok", pid: process.pid }, { status: 200 });
+    }
+
+    // ------------------------------------------------------------------
+    // GET /events — SSE stream for watcher events (Story 3.2)
+    //
+    // The UI (via Tauri IPC) or future internal consumers can subscribe
+    // to receive AssetIndexUpdatedEvent, WatcherStartedEvent, and
+    // WatcherErrorEvent in real time.
+    //
+    // Each event is serialised as:
+    //   data: <JSON>\n\n
+    // per the SSE specification (text/event-stream).
+    //
+    // A "connected" heartbeat comment is sent immediately on connect so
+    // the client knows the stream is live.
+    // ------------------------------------------------------------------
+    if (url.pathname === "/events" && req.method === "GET") {
+      let unsubscribe: (() => void) | null = null;
+
+      const stream = new ReadableStream<Uint8Array>({
+        start(controller) {
+          const encoder = new TextEncoder();
+
+          // Send an immediate heartbeat comment so the client sees a
+          // live stream rather than a hanging connection.
+          controller.enqueue(encoder.encode(": connected\n\n"));
+
+          unsubscribe = subscribeToWatcherEvents((event: WatcherEvent) => {
+            try {
+              const data = `data: ${JSON.stringify(event)}\n\n`;
+              controller.enqueue(encoder.encode(data));
+            } catch {
+              // Controller may be closed if the client disconnected.
+            }
+          });
+        },
+        cancel() {
+          if (unsubscribe !== null) {
+            unsubscribe();
+            unsubscribe = null;
+          }
+        },
+      });
+
+      return new Response(stream, {
+        status: 200,
+        headers: {
+          "Content-Type": "text/event-stream",
+          "Cache-Control": "no-cache",
+          Connection: "keep-alive",
+          "X-Accel-Buffering": "no", // Disable nginx/proxy buffering if present.
+        },
+      });
+    }
+
+    // ------------------------------------------------------------------
+    // POST /watcher/project/open — register a per-project watch root
+    //
+    // Body: { "projectRoot": "/absolute/path/to/project" }
+    //
+    // Emits WatcherStartedEvent on success.
+    // Emits WatcherErrorEvent with reason "project_claude_missing" if
+    // <projectRoot>/.claude/ does not exist.
+    // ------------------------------------------------------------------
+    if (url.pathname === "/watcher/project/open" && req.method === "POST") {
+      return req.json().then((body: unknown) => {
+        if (
+          typeof body !== "object" ||
+          body === null ||
+          typeof (body as Record<string, unknown>).projectRoot !== "string"
+        ) {
+          return Response.json(
+            { error: "Bad Request", message: "Body must be { projectRoot: string }" },
+            { status: 400 },
+          );
+        }
+        const projectRoot = (body as { projectRoot: string }).projectRoot;
+        startProjectWatcher(projectRoot);
+        return Response.json({ ok: true, projectRoot }, { status: 200 });
+      });
+    }
+
+    // ------------------------------------------------------------------
+    // POST /watcher/project/close — remove a per-project watch root
+    //
+    // Body: { "projectRoot": "/absolute/path/to/project" }
+    // ------------------------------------------------------------------
+    if (url.pathname === "/watcher/project/close" && req.method === "POST") {
+      return req.json().then((body: unknown) => {
+        if (
+          typeof body !== "object" ||
+          body === null ||
+          typeof (body as Record<string, unknown>).projectRoot !== "string"
+        ) {
+          return Response.json(
+            { error: "Bad Request", message: "Body must be { projectRoot: string }" },
+            { status: 400 },
+          );
+        }
+        const projectRoot = (body as { projectRoot: string }).projectRoot;
+        stopProjectWatcher(projectRoot);
+        return Response.json({ ok: true, projectRoot }, { status: 200 });
+      });
     }
 
     // All other routes: 404. Future epics will extend this routing.
@@ -143,21 +254,31 @@ process.stdout.write(JSON.stringify({ port: server.port }) + "\n");
 log("INFO", "ZoePlane sidecar HTTP server ready", { hostname: "127.0.0.1", port: server.port });
 
 // ---------------------------------------------------------------------------
+// FS Watcher startup (Epic 03, Story 3.2)
+// Start the global watcher after the HTTP server is ready so that
+// WatcherStartedEvent emissions have an active SSE stream to fan out on.
+// ---------------------------------------------------------------------------
+
+startGlobalWatcher();
+
+log("INFO", "ZoePlane sidecar FS watcher started");
+
+// ---------------------------------------------------------------------------
 // Signal handlers — clean shutdown
 // ---------------------------------------------------------------------------
 
 process.on("SIGTERM", () => {
   log("INFO", "Sidecar SIGTERM — shutting down");
-  server.stop(true);
-  process.exit(0);
+  void stopWatcher().then(() => {
+    server.stop(true);
+    process.exit(0);
+  });
 });
 
 process.on("SIGINT", () => {
   log("INFO", "Sidecar SIGINT — shutting down");
-  server.stop(true);
-  process.exit(0);
+  void stopWatcher().then(() => {
+    server.stop(true);
+    process.exit(0);
+  });
 });
-
-// TODO (Epic 03): start FS watcher and asset indexer
-// import { startIndexer } from "./indexer";
-// await startIndexer();
