@@ -16,31 +16,14 @@
  *   bun run test --reporter=verbose src/components/ui/Tabs/__tests__/Tabs.a11y.test.tsx
  */
 
-import axe from "axe-core";
 import { cleanup, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it } from "vitest";
+import { runAxe, formatViolations } from "@/test/helpers/runAxe";
 import { Tab, TabPanel, TabsList, TabsRoot } from "../Tabs";
 
 afterEach(() => {
   cleanup();
 });
-
-async function runAxe(container: HTMLElement): Promise<axe.AxeResults> {
-  return new Promise((resolve, reject) => {
-    axe.run(
-      container,
-      {
-        rules: {
-          "color-contrast": { enabled: false },
-        },
-      },
-      (err, results) => {
-        if (err) reject(err);
-        else resolve(results);
-      },
-    );
-  });
-}
 
 // Helper: render a fully composed Tabs component
 function renderTabs(variant: "underline" | "pill" = "underline", defaultValue = "overview") {
@@ -118,28 +101,19 @@ describe("Tabs — structural accessibility (Story 2.13 AC #7)", () => {
     it("has zero axe violations — underline tabs (default)", async () => {
       const { container } = renderTabs("underline");
       const results = await runAxe(container);
-      expect(
-        results.violations,
-        results.violations.map((v) => `${v.id}: ${v.description}`).join("; "),
-      ).toHaveLength(0);
+      expect(results.violations, formatViolations(results)).toHaveLength(0);
     });
 
     it("has zero axe violations — pill tabs", async () => {
       const { container } = renderTabs("pill");
       const results = await runAxe(container);
-      expect(
-        results.violations,
-        results.violations.map((v) => `${v.id}: ${v.description}`).join("; "),
-      ).toHaveLength(0);
+      expect(results.violations, formatViolations(results)).toHaveLength(0);
     });
 
     it("has zero axe violations — non-first tab selected", async () => {
       const { container } = renderTabs("underline", "logs");
       const results = await runAxe(container);
-      expect(
-        results.violations,
-        results.violations.map((v) => `${v.id}: ${v.description}`).join("; "),
-      ).toHaveLength(0);
+      expect(results.violations, formatViolations(results)).toHaveLength(0);
     });
   });
 });

@@ -352,5 +352,3 @@ export function LibraryShell<T>({
     </section>
   );
 }
-
-export default LibraryShell;

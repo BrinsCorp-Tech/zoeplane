@@ -21,9 +21,9 @@
  *   bun run test --reporter=verbose src/components/ui/EvaluatorStatusBadge/__tests__/EvaluatorStatusBadge.a11y.test.tsx
  */
 
-import axe from "axe-core";
 import { cleanup, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it } from "vitest";
+import { runAxe, formatViolations } from "@/test/helpers/runAxe";
 import { EvaluatorStatusBadge } from "../EvaluatorStatusBadge";
 
 // Unmount React trees between tests so DOM elements don't accumulate across
@@ -31,27 +31,6 @@ import { EvaluatorStatusBadge } from "../EvaluatorStatusBadge";
 afterEach(() => {
   cleanup();
 });
-
-// ─── axe helper ──────────────────────────────────────────────────────────────
-
-async function runAxe(container: HTMLElement): Promise<axe.AxeResults> {
-  return new Promise((resolve, reject) => {
-    axe.run(
-      container,
-      {
-        rules: {
-          // Disabled: JSDOM cannot compute OKLCH CSS custom property values.
-          // Contrast verification deferred to Story 2.13 in-browser test.
-          "color-contrast": { enabled: false },
-        },
-      },
-      (err, results) => {
-        if (err) reject(err);
-        else resolve(results);
-      },
-    );
-  });
-}
 
 // ─── Tests ────────────────────────────────────────────────────────────────────
 
@@ -190,10 +169,7 @@ describe("EvaluatorStatusBadge — structural accessibility (AC#6)", () => {
         <EvaluatorStatusBadge mode="evaluator-status" resourceType="hook" state="approved" />,
       );
       const results = await runAxe(container);
-      expect(
-        results.violations,
-        results.violations.map((v) => `${v.id}: ${v.description}`).join("; "),
-      ).toHaveLength(0);
+      expect(results.violations, formatViolations(results)).toHaveLength(0);
     });
 
     it("has zero axe violations — Hook Quarantined", async () => {
@@ -201,10 +177,7 @@ describe("EvaluatorStatusBadge — structural accessibility (AC#6)", () => {
         <EvaluatorStatusBadge mode="evaluator-status" resourceType="hook" state="quarantined" />,
       );
       const results = await runAxe(container);
-      expect(
-        results.violations,
-        results.violations.map((v) => `${v.id}: ${v.description}`).join("; "),
-      ).toHaveLength(0);
+      expect(results.violations, formatViolations(results)).toHaveLength(0);
     });
 
     it("has zero axe violations — Hook Disabled by you (fallback token state)", async () => {
@@ -216,10 +189,7 @@ describe("EvaluatorStatusBadge — structural accessibility (AC#6)", () => {
         />,
       );
       const results = await runAxe(container);
-      expect(
-        results.violations,
-        results.violations.map((v) => `${v.id}: ${v.description}`).join("; "),
-      ).toHaveLength(0);
+      expect(results.violations, formatViolations(results)).toHaveLength(0);
     });
 
     it("has zero axe violations — Command Invalid (validity-only)", async () => {
@@ -227,10 +197,7 @@ describe("EvaluatorStatusBadge — structural accessibility (AC#6)", () => {
         <EvaluatorStatusBadge mode="validity-only" resourceType="command" state="invalid" />,
       );
       const results = await runAxe(container);
-      expect(
-        results.violations,
-        results.violations.map((v) => `${v.id}: ${v.description}`).join("; "),
-      ).toHaveLength(0);
+      expect(results.violations, formatViolations(results)).toHaveLength(0);
     });
 
     it("has zero axe violations — full Hook state suite rendered simultaneously", async () => {
@@ -262,10 +229,7 @@ describe("EvaluatorStatusBadge — structural accessibility (AC#6)", () => {
         </div>,
       );
       const results = await runAxe(container);
-      expect(
-        results.violations,
-        results.violations.map((v) => `${v.id}: ${v.description}`).join("; "),
-      ).toHaveLength(0);
+      expect(results.violations, formatViolations(results)).toHaveLength(0);
     });
   });
 

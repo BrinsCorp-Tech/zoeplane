@@ -20,31 +20,14 @@
  *   bun run test --reporter=verbose src/components/ui/Input/__tests__/Input.a11y.test.tsx
  */
 
-import axe from "axe-core";
 import { cleanup, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it } from "vitest";
+import { runAxe, formatViolations } from "@/test/helpers/runAxe";
 import { Input } from "../Input";
 
 afterEach(() => {
   cleanup();
 });
-
-async function runAxe(container: HTMLElement): Promise<axe.AxeResults> {
-  return new Promise((resolve, reject) => {
-    axe.run(
-      container,
-      {
-        rules: {
-          "color-contrast": { enabled: false },
-        },
-      },
-      (err, results) => {
-        if (err) reject(err);
-        else resolve(results);
-      },
-    );
-  });
-}
 
 describe("Input — structural accessibility (Story 2.13 AC #7)", () => {
   // ── Default render ───────────────────────────────────────────────────────────
@@ -106,19 +89,13 @@ describe("Input — structural accessibility (Story 2.13 AC #7)", () => {
     it("has zero axe violations — default text input with aria-label", async () => {
       const { container } = render(<Input aria-label="Search" />);
       const results = await runAxe(container);
-      expect(
-        results.violations,
-        results.violations.map((v) => `${v.id}: ${v.description}`).join("; "),
-      ).toHaveLength(0);
+      expect(results.violations, formatViolations(results)).toHaveLength(0);
     });
 
     it("has zero axe violations — disabled input", async () => {
       const { container } = render(<Input aria-label="Name" disabled />);
       const results = await runAxe(container);
-      expect(
-        results.violations,
-        results.violations.map((v) => `${v.id}: ${v.description}`).join("; "),
-      ).toHaveLength(0);
+      expect(results.violations, formatViolations(results)).toHaveLength(0);
     });
 
     it("has zero axe violations — error state", async () => {
@@ -126,10 +103,7 @@ describe("Input — structural accessibility (Story 2.13 AC #7)", () => {
         <Input aria-label="Email" aria-invalid="true" aria-describedby="email-error" />,
       );
       const results = await runAxe(container);
-      expect(
-        results.violations,
-        results.violations.map((v) => `${v.id}: ${v.description}`).join("; "),
-      ).toHaveLength(0);
+      expect(results.violations, formatViolations(results)).toHaveLength(0);
     });
 
     it("has zero axe violations — with leading affix", async () => {
@@ -137,10 +111,7 @@ describe("Input — structural accessibility (Story 2.13 AC #7)", () => {
         <Input aria-label="Search" leadingAffix={<span aria-hidden="true">$</span>} />,
       );
       const results = await runAxe(container);
-      expect(
-        results.violations,
-        results.violations.map((v) => `${v.id}: ${v.description}`).join("; "),
-      ).toHaveLength(0);
+      expect(results.violations, formatViolations(results)).toHaveLength(0);
     });
   });
 });

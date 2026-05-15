@@ -19,51 +19,14 @@
  *   bun run test --reporter=verbose src/components/ui/Tooltip/__tests__/Tooltip.a11y.test.tsx
  */
 
-import axe from "axe-core";
 import { cleanup, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it } from "vitest";
+import { runAxe, runAxeBody, formatViolations } from "@/test/helpers/runAxe";
 import { TooltipContent, TooltipProvider, TooltipRoot, TooltipTrigger } from "../Tooltip";
 
 afterEach(() => {
   cleanup();
 });
-
-async function runAxe(container: HTMLElement): Promise<axe.AxeResults> {
-  return new Promise((resolve, reject) => {
-    axe.run(
-      container,
-      {
-        rules: {
-          "color-contrast": { enabled: false },
-        },
-      },
-      (err, results) => {
-        if (err) reject(err);
-        else resolve(results);
-      },
-    );
-  });
-}
-
-// Body-scoped axe runner: disables "region" rule because Radix portals tooltip
-// content to document.body outside any landmark — correct browser behaviour for overlays.
-async function runAxeBody(): Promise<axe.AxeResults> {
-  return new Promise((resolve, reject) => {
-    axe.run(
-      document.body,
-      {
-        rules: {
-          "color-contrast": { enabled: false },
-          region: { enabled: false },
-        },
-      },
-      (err, results) => {
-        if (err) reject(err);
-        else resolve(results);
-      },
-    );
-  });
-}
 
 // Helper: render a tooltip (defaultOpen for JSDOM)
 function renderTooltip(open = false) {
@@ -105,19 +68,13 @@ describe("Tooltip — structural accessibility (Story 2.13 AC #7)", () => {
     it("has zero axe violations — trigger only (closed state)", async () => {
       const { container } = renderTooltip(false);
       const results = await runAxe(container);
-      expect(
-        results.violations,
-        results.violations.map((v) => `${v.id}: ${v.description}`).join("; "),
-      ).toHaveLength(0);
+      expect(results.violations, formatViolations(results)).toHaveLength(0);
     });
 
     it("has zero axe violations — tooltip open", async () => {
       renderTooltip(true);
-      const results = await runAxeBody();
-      expect(
-        results.violations,
-        results.violations.map((v) => `${v.id}: ${v.description}`).join("; "),
-      ).toHaveLength(0);
+      const results = await runAxeBody({ region: { enabled: false } });
+      expect(results.violations, formatViolations(results)).toHaveLength(0);
     });
   });
 });

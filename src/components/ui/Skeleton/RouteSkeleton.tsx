@@ -74,5 +74,3 @@ export function RouteSkeleton({
     </div>
   );
 }
-
-export default RouteSkeleton;

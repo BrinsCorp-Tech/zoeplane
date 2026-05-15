@@ -96,4 +96,3 @@ const Spinner = React.forwardRef<HTMLSpanElement, SpinnerProps>(
 Spinner.displayName = "Spinner";
 
 export { Spinner };
-export default Spinner;

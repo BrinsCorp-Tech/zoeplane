@@ -94,5 +94,3 @@ export function StreamSkeleton({
     </div>
   );
 }
-
-export default StreamSkeleton;

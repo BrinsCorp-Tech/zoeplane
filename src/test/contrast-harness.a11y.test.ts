@@ -41,7 +41,7 @@
 // JSDOM not needed — this harness does pure math on OKLCH literals, no DOM rendering.
 
 import { wcagContrast } from "culori";
-import { describe, expect, it } from "vitest";
+import { afterAll, describe, expect, it } from "vitest";
 import {
   AAA_RATIO,
   DARK_PAIRS,
@@ -53,36 +53,23 @@ import {
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 /**
- * Compute WCAG 2.2 contrast ratio between two OKLCH literal strings.
- * culori's wcagContrast() returns a ratio in [1, 21].
- */
-function contrast(fg: string, bg: string): number {
-  return wcagContrast(fg, bg);
-}
-
-/**
  * Format a ratio to two decimal places for failure messages.
  */
 function fmt(r: number): string {
   return r.toFixed(2);
 }
 
-// ─── AAA achievement tracking (AC #2) ────────────────────────────────────────
-// Accumulated across both theme loops; console.log summary after all tests.
-
-const aaaResults: {
-  name: string;
-  lightRatio: number | null;
-  darkRatio: number | null;
-}[] = [];
-
 // ─── Per-theme test factory ───────────────────────────────────────────────────
 
-function testTheme(theme: "light" | "dark", pairs: TokenPair[]): void {
+function testTheme(
+  theme: "light" | "dark",
+  pairs: TokenPair[],
+  aaaResults: { name: string; lightRatio: number | null; darkRatio: number | null }[],
+): void {
   describe(`${theme} theme — AA contrast (AC #1)`, () => {
     for (const pair of pairs) {
       it(`[${theme}] ${pair.name} ≥ ${THRESHOLD_RATIOS[pair.threshold]}:1 (${pair.threshold})`, () => {
-        const ratio = contrast(pair.fg, pair.bg);
+        const ratio = wcagContrast(pair.fg, pair.bg);
         const required = THRESHOLD_RATIOS[pair.threshold];
 
         // AC #3: fail with actionable message if AA not met
@@ -126,37 +113,40 @@ function testTheme(theme: "light" | "dark", pairs: TokenPair[]): void {
 // ─── Test suites ──────────────────────────────────────────────────────────────
 
 describe("WCAG 2.2 AA contrast harness — semantic token pairs", () => {
-  testTheme("light", LIGHT_PAIRS);
-  testTheme("dark", DARK_PAIRS);
+  // ─── AAA achievement tracking (AC #2) ──────────────────────────────────────
+  // Accumulated across both theme loops; afterAll prints cross-theme summary.
+  const aaaResults: {
+    name: string;
+    lightRatio: number | null;
+    darkRatio: number | null;
+  }[] = [];
 
-  // AC #2: summary of AAA gaps (runs after individual pair tests)
-  describe("AAA achievement summary (AC #2 — log only, no failures)", () => {
-    it("logs AAA gap report for any body-text pairs that declared aaaGoal", () => {
-      // After all pair tests have run, print a cross-theme summary.
-      // This test ALWAYS passes — it is purely informational per AC #2.
-      for (const r of aaaResults) {
-        const lightOk = r.lightRatio !== null && r.lightRatio >= AAA_RATIO;
-        const darkOk = r.darkRatio !== null && r.darkRatio >= AAA_RATIO;
+  testTheme("light", LIGHT_PAIRS, aaaResults);
+  testTheme("dark", DARK_PAIRS, aaaResults);
 
-        if (lightOk && darkOk) {
-          console.log(`[AAA] BOTH themes | "${r.name}" — AAA achieved`);
-        } else if (lightOk && !darkOk) {
-          console.log(
-            `[AAA gap] "${r.name}" — AAA in LIGHT (${fmt(r.lightRatio!)}:1) but NOT in DARK (${fmt(r.darkRatio ?? 0)}:1)`,
-          );
-        } else if (!lightOk && darkOk) {
-          console.log(
-            `[AAA gap] "${r.name}" — AAA in DARK (${fmt(r.darkRatio!)}:1) but NOT in LIGHT (${fmt(r.lightRatio ?? 0)}:1)`,
-          );
-        } else {
-          console.log(
-            `[AAA gap] "${r.name}" — AAA in NEITHER theme (light=${fmt(r.lightRatio ?? 0)}:1, dark=${fmt(r.darkRatio ?? 0)}:1)`,
-          );
-        }
+  // AC #2: summary of AAA gaps (runs after all individual pair tests)
+  afterAll(() => {
+    // After all pair tests have run, print a cross-theme summary.
+    // Purely informational per AC #2 — no assertions.
+    for (const r of aaaResults) {
+      const lightOk = r.lightRatio !== null && r.lightRatio >= AAA_RATIO;
+      const darkOk = r.darkRatio !== null && r.darkRatio >= AAA_RATIO;
+
+      if (lightOk && darkOk) {
+        console.log(`[AAA] BOTH themes | "${r.name}" — AAA achieved`);
+      } else if (lightOk && !darkOk) {
+        console.log(
+          `[AAA gap] "${r.name}" — AAA in LIGHT (${fmt(r.lightRatio!)}:1) but NOT in DARK (${fmt(r.darkRatio ?? 0)}:1)`,
+        );
+      } else if (!lightOk && darkOk) {
+        console.log(
+          `[AAA gap] "${r.name}" — AAA in DARK (${fmt(r.darkRatio!)}:1) but NOT in LIGHT (${fmt(r.lightRatio ?? 0)}:1)`,
+        );
+      } else {
+        console.log(
+          `[AAA gap] "${r.name}" — AAA in NEITHER theme (light=${fmt(r.lightRatio ?? 0)}:1, dark=${fmt(r.darkRatio ?? 0)}:1)`,
+        );
       }
-
-      // Always passes — gaps are logged for the accessibility-audit-sprint-2.md record
-      expect(true).toBe(true);
-    });
+    }
   });
 });

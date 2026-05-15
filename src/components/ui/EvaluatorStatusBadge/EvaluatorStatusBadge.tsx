@@ -344,5 +344,3 @@ export function EvaluatorStatusBadge(props: EvaluatorStatusBadgeProps): React.JS
 }
 
 EvaluatorStatusBadge.displayName = "EvaluatorStatusBadge";
-
-export default EvaluatorStatusBadge;

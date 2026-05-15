@@ -17,32 +17,15 @@
  *   bun run test --reporter=verbose src/components/ui/FormField/__tests__/FormField.a11y.test.tsx
  */
 
-import axe from "axe-core";
 import { cleanup, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it } from "vitest";
+import { runAxe, formatViolations } from "@/test/helpers/runAxe";
 import { Input } from "@/components/ui/Input/Input";
 import { FormControl, FormErrorText, FormField, FormHelperText, FormLabel } from "../FormField";
 
 afterEach(() => {
   cleanup();
 });
-
-async function runAxe(container: HTMLElement): Promise<axe.AxeResults> {
-  return new Promise((resolve, reject) => {
-    axe.run(
-      container,
-      {
-        rules: {
-          "color-contrast": { enabled: false },
-        },
-      },
-      (err, results) => {
-        if (err) reject(err);
-        else resolve(results);
-      },
-    );
-  });
-}
 
 describe("FormField — structural accessibility (Story 2.13 AC #7)", () => {
   // ── Label association ─────────────────────────────────────────────────────────
@@ -148,10 +131,7 @@ describe("FormField — structural accessibility (Story 2.13 AC #7)", () => {
         </FormField>,
       );
       const results = await runAxe(container);
-      expect(
-        results.violations,
-        results.violations.map((v) => `${v.id}: ${v.description}`).join("; "),
-      ).toHaveLength(0);
+      expect(results.violations, formatViolations(results)).toHaveLength(0);
     });
 
     it("has zero axe violations — required field", async () => {
@@ -164,10 +144,7 @@ describe("FormField — structural accessibility (Story 2.13 AC #7)", () => {
         </FormField>,
       );
       const results = await runAxe(container);
-      expect(
-        results.violations,
-        results.violations.map((v) => `${v.id}: ${v.description}`).join("; "),
-      ).toHaveLength(0);
+      expect(results.violations, formatViolations(results)).toHaveLength(0);
     });
 
     it("has zero axe violations — error state", async () => {
@@ -181,10 +158,7 @@ describe("FormField — structural accessibility (Story 2.13 AC #7)", () => {
         </FormField>,
       );
       const results = await runAxe(container);
-      expect(
-        results.violations,
-        results.violations.map((v) => `${v.id}: ${v.description}`).join("; "),
-      ).toHaveLength(0);
+      expect(results.violations, formatViolations(results)).toHaveLength(0);
     });
 
     it("has zero axe violations — with helper text", async () => {
@@ -198,10 +172,7 @@ describe("FormField — structural accessibility (Story 2.13 AC #7)", () => {
         </FormField>,
       );
       const results = await runAxe(container);
-      expect(
-        results.violations,
-        results.violations.map((v) => `${v.id}: ${v.description}`).join("; "),
-      ).toHaveLength(0);
+      expect(results.violations, formatViolations(results)).toHaveLength(0);
     });
   });
 });

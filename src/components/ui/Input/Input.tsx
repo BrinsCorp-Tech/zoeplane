@@ -38,7 +38,7 @@ const Input = React.forwardRef<HTMLInputElement, InputProps>(
       return (
         <div className="relative flex items-center">
           {leadingAffix && (
-            <div className="pointer-events-none absolute left-3 flex items-center text-muted-foreground">
+            <div className="text-muted-foreground pointer-events-none absolute left-3 flex items-center">
               {leadingAffix}
             </div>
           )}
@@ -47,15 +47,15 @@ const Input = React.forwardRef<HTMLInputElement, InputProps>(
             ref={ref}
             className={cn(
               // Base styles — matches spec §3 default state
-              "flex h-9 w-full rounded-md border border-input bg-input px-3 py-1 text-sm text-foreground shadow-sm",
+              "border-input bg-input text-foreground flex h-9 w-full rounded-md border px-3 py-1 text-sm shadow-sm",
               // Placeholder
               "placeholder:text-muted-foreground",
               // Focus
-              "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background",
+              "focus-visible:ring-ring focus-visible:ring-offset-background focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:outline-none",
               // Hover — border-strong in 150 ms (A-10); relies on tokens zeroing durations for reduced-motion
               "transition-colors duration-150",
               // Disabled state
-              "disabled:cursor-not-allowed disabled:opacity-60 disabled:bg-surface-muted",
+              "disabled:bg-surface-muted disabled:cursor-not-allowed disabled:opacity-60",
               // Read-only state (bg-surface-muted but NOT disabled color, so user can read)
               "read-only:bg-surface-muted read-only:cursor-default",
               // Affix padding overrides
@@ -66,7 +66,7 @@ const Input = React.forwardRef<HTMLInputElement, InputProps>(
             {...props}
           />
           {trailingAffix && (
-            <div className="absolute right-3 flex items-center text-muted-foreground">
+            <div className="text-muted-foreground absolute right-3 flex items-center">
               {trailingAffix}
             </div>
           )}
@@ -79,11 +79,11 @@ const Input = React.forwardRef<HTMLInputElement, InputProps>(
         type={type}
         ref={ref}
         className={cn(
-          "flex h-9 w-full rounded-md border border-input bg-input px-3 py-1 text-sm text-foreground shadow-sm",
+          "border-input bg-input text-foreground flex h-9 w-full rounded-md border px-3 py-1 text-sm shadow-sm",
           "placeholder:text-muted-foreground",
-          "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background",
+          "focus-visible:ring-ring focus-visible:ring-offset-background focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:outline-none",
           "transition-colors duration-150",
-          "disabled:cursor-not-allowed disabled:opacity-60 disabled:bg-surface-muted",
+          "disabled:bg-surface-muted disabled:cursor-not-allowed disabled:opacity-60",
           "read-only:bg-surface-muted read-only:cursor-default",
           className,
         )}
@@ -96,4 +96,3 @@ const Input = React.forwardRef<HTMLInputElement, InputProps>(
 Input.displayName = "Input";
 
 export { Input };
-export default Input;
