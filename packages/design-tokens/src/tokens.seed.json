@@ -36,7 +36,7 @@
     "success": {
       "400": { "$value": "oklch(0.760 0.150 150)", "$type": "color" },
       "500": { "$value": "oklch(0.660 0.170 150)", "$type": "color" },
-      "600": { "$value": "oklch(0.560 0.170 150)", "$type": "color" }
+      "600": { "$value": "oklch(0.540 0.170 150)", "$type": "color" }
     },
     "warn": {
       "400": { "$value": "oklch(0.800 0.150 75)", "$type": "color" },
