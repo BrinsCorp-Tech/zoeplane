@@ -72,9 +72,9 @@ Plugin method permissions are **not** declared in `tauri.conf.json` in Tauri 2.x
 
 The `plugins.fs` block has been removed from `tauri.conf.json` entirely. `tauri-plugin-fs` v2.5.1 accepts only `requireLiteralLeadingDot` as runtime configuration, and ZoePlane uses the platform default without overriding it. If a future story requires overriding `requireLiteralLeadingDot`, that story re-adds only the `plugins.fs.requireLiteralLeadingDot` key — never a `scope` array, which is a Tauri 1.x construct rejected at runtime by the 2.x schema. FS path scope is governed by `capabilities/default.json` (ACL layer) and programmatic runtime scope initialization in `lib.rs` (runtime layer) per ADR-003.
 
-The `plugins.shell` block contains only `"open": false` (URL-open access is not granted in Sprint 1). The `plugins.deep-link` block contains only `desktop.schemes: ["zoeplane"]` (documented below). No other `plugins.*` runtime configuration blocks are present in Sprint 1.
+The `plugins.shell` block contains only `"open": false` (URL-open access is not granted). The `plugins.deep-link` block contains only `desktop.schemes: ["zoeplane"]` (documented below). No other `plugins.*` runtime configuration blocks are present.
 
-`app.withGlobalTauri: true` is set as a dev-ergonomics setting enabling `window.__TAURI__` in the DevTools console for smoke testing. This is a Sprint 1 development convenience and is scheduled for revert to `false` before v0.1.0-alpha or when the first untrusted-content surface lands (whichever comes first) — see `docs/stories/epic-01/SPRINT-2-CARRYOVERS.md`.
+`app.withGlobalTauri: true` is set as a dev-ergonomics setting enabling `window.__TAURI__` in the DevTools console for smoke testing. This is a development convenience and is scheduled for revert to `false` before v0.1.0-alpha or when the first untrusted-content surface lands (whichever comes first).
 
 See `docs/ARCHITECTURE.md` — "Tauri 2.x Capability Model" and "Three-way Tauri 2.x scope model" for the full permission surface table and the pattern for adding future plugin permissions.
 
@@ -112,6 +112,35 @@ The Tauri shell constructs and passes these arguments to the sidecar binary at s
 | `--migrations-dir <path>` | No (dev fallback) | Absolute path to the bundled migrations directory. In production builds, the Tauri shell passes the resource-bundled path (`<resourceDir>/migrations`). In dev mode, the sidecar falls back to `sidecar/src/db/migrations/` relative to the binary and emits a WARN. |
 
 Source: `sidecar/src/index.ts:40-89`.
+
+## Theme Configuration
+
+Theme configuration is managed entirely client-side by `ThemeProvider` (`src/components/theme/ThemeProvider.tsx`). There is no server-side or compile-time theme configuration.
+
+| Key                              | Type                            | Default    | Description                                                                                                                        |
+| -------------------------------- | ------------------------------- | ---------- | ---------------------------------------------------------------------------------------------------------------------------------- |
+| `localStorage["zoeplane:theme"]` | `"light" \| "dark" \| "system"` | `"system"` | User's stored theme preference. `"system"` follows the OS `prefers-color-scheme` media query. Read and written by `ThemeProvider`. |
+
+**How it works:**
+
+1. An inline `<script>` in `index.html` reads `localStorage["zoeplane:theme"]` and `matchMedia("(prefers-color-scheme: dark)")` before React mounts. It writes `data-theme="light"` or `data-theme="dark"` on `<html>` synchronously — this prevents flash-of-unstyled-content (FOUC).
+2. `ThemeProvider` initializes React state from `localStorage` on mount, consistent with the attribute already applied.
+3. Mid-session changes (`setPreference()` from `useTheme()`) write to `localStorage`, update React state, and apply the new `data-theme` attribute via `useLayoutEffect`.
+4. When preference is `"system"`, `ThemeProvider` subscribes to `MediaQueryList` `change` events and updates the resolved theme live when the OS mode changes.
+
+**Consuming theme in components:** Components must not read `useTheme()` to branch their JSX or inline styles. All light/dark variation is expressed via CSS custom properties that resolve differently under `[data-theme="dark"]` on `<html>`. `useTheme()` is for UI controls that let the user change the preference (e.g., a settings toggle) — not for rendering logic.
+
+## DEV-Mode Store Exposure
+
+When running with `import.meta.env.DEV` set to `true` (Vite development mode, `bun run tauri:dev`), three Zustand stores are exposed on the `window` object for devtools-driven smoke testing:
+
+| Property                        | Type          | Source                         |
+| ------------------------------- | ------------- | ------------------------------ |
+| `window.useAppStore`            | Zustand store | `src/stores/app.ts`            |
+| `window.useCommandPaletteStore` | Zustand store | `src/stores/commandPalette.ts` |
+| `window.useNotificationsStore`  | Zustand store | `src/stores/notifications.ts`  |
+
+This code is tree-shaken from production builds — the `import.meta.env.DEV` branch is statically removed by Vite's build-time tree-shaking (`src/main.tsx:22-29`). These properties are never present in a signed release binary.
 
 ## Logging
 
@@ -152,4 +181,4 @@ Fields: `level` (`INFO` | `WARN` | `ERROR`), `message`, `pid`, plus any `extra` 
 
 ---
 
-_Last reviewed: 2026-05-10 by project-manager agent — Story 1.12 (Filesystem Allowlist section updated for ADR-003 three-way scope model; plugins.fs block removal documented; withGlobalTauri policy noted; fs-scope-init log target added)._
+_Last reviewed: 2026-05-15 by tech-writer agent against Sprint 2 (Story 2.22: PostCSS consolidation, DEV-mode store exposure; Story 2.5: ThemeProvider + theme configuration)._
