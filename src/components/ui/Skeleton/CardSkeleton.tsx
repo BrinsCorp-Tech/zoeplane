@@ -63,5 +63,3 @@ export function CardSkeleton({ className }: CardSkeletonProps): React.ReactEleme
     </div>
   );
 }
-
-export default CardSkeleton;

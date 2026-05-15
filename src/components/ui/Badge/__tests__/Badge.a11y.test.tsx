@@ -16,31 +16,14 @@
  *   bun run test --reporter=verbose src/components/ui/Badge/__tests__/Badge.a11y.test.tsx
  */
 
-import axe from "axe-core";
 import { cleanup, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it } from "vitest";
+import { runAxe, formatViolations } from "@/test/helpers/runAxe";
 import { Badge } from "../Badge";
 
 afterEach(() => {
   cleanup();
 });
-
-async function runAxe(container: HTMLElement): Promise<axe.AxeResults> {
-  return new Promise((resolve, reject) => {
-    axe.run(
-      container,
-      {
-        rules: {
-          "color-contrast": { enabled: false },
-        },
-      },
-      (err, results) => {
-        if (err) reject(err);
-        else resolve(results);
-      },
-    );
-  });
-}
 
 describe("Badge — structural accessibility (Story 2.13 AC #7)", () => {
   // ── Default render ───────────────────────────────────────────────────────────
@@ -102,37 +85,25 @@ describe("Badge — structural accessibility (Story 2.13 AC #7)", () => {
     it("has zero axe violations — default badge", async () => {
       const { container } = render(<Badge>Active</Badge>);
       const results = await runAxe(container);
-      expect(
-        results.violations,
-        results.violations.map((v) => `${v.id}: ${v.description}`).join("; "),
-      ).toHaveLength(0);
+      expect(results.violations, formatViolations(results)).toHaveLength(0);
     });
 
     it("has zero axe violations — secondary variant", async () => {
       const { container } = render(<Badge variant="secondary">Draft</Badge>);
       const results = await runAxe(container);
-      expect(
-        results.violations,
-        results.violations.map((v) => `${v.id}: ${v.description}`).join("; "),
-      ).toHaveLength(0);
+      expect(results.violations, formatViolations(results)).toHaveLength(0);
     });
 
     it("has zero axe violations — destructive variant", async () => {
       const { container } = render(<Badge variant="destructive">Error</Badge>);
       const results = await runAxe(container);
-      expect(
-        results.violations,
-        results.violations.map((v) => `${v.id}: ${v.description}`).join("; "),
-      ).toHaveLength(0);
+      expect(results.violations, formatViolations(results)).toHaveLength(0);
     });
 
     it("has zero axe violations — outline variant", async () => {
       const { container } = render(<Badge variant="outline">Beta</Badge>);
       const results = await runAxe(container);
-      expect(
-        results.violations,
-        results.violations.map((v) => `${v.id}: ${v.description}`).join("; "),
-      ).toHaveLength(0);
+      expect(results.violations, formatViolations(results)).toHaveLength(0);
     });
 
     it("has zero axe violations — with dismiss button", async () => {
@@ -142,10 +113,7 @@ describe("Badge — structural accessibility (Story 2.13 AC #7)", () => {
         </Badge>,
       );
       const results = await runAxe(container);
-      expect(
-        results.violations,
-        results.violations.map((v) => `${v.id}: ${v.description}`).join("; "),
-      ).toHaveLength(0);
+      expect(results.violations, formatViolations(results)).toHaveLength(0);
     });
   });
 });

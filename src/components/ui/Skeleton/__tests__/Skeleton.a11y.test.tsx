@@ -16,9 +16,9 @@
  *   bun run test --reporter=verbose src/components/ui/Skeleton/__tests__/Skeleton.a11y.test.tsx
  */
 
-import axe from "axe-core";
 import { cleanup, render } from "@testing-library/react";
 import { afterEach, describe, expect, it } from "vitest";
+import { runAxe, formatViolations } from "@/test/helpers/runAxe";
 import { Skeleton } from "../Skeleton";
 import { CardSkeleton } from "../CardSkeleton";
 import { RouteSkeleton } from "../RouteSkeleton";
@@ -27,23 +27,6 @@ import { StreamSkeleton } from "../StreamSkeleton";
 afterEach(() => {
   cleanup();
 });
-
-async function runAxe(container: HTMLElement): Promise<axe.AxeResults> {
-  return new Promise((resolve, reject) => {
-    axe.run(
-      container,
-      {
-        rules: {
-          "color-contrast": { enabled: false },
-        },
-      },
-      (err, results) => {
-        if (err) reject(err);
-        else resolve(results);
-      },
-    );
-  });
-}
 
 // Correct wrapper: region with role="status" aria-live="polite" aria-busy="true"
 // Individual Skeleton elements are aria-hidden (decorative).
@@ -102,10 +85,7 @@ describe("Skeleton — structural accessibility (Story 2.13 AC #7)", () => {
         </SkeletonRegion>,
       );
       const results = await runAxe(container);
-      expect(
-        results.violations,
-        results.violations.map((v) => `${v.id}: ${v.description}`).join("; "),
-      ).toHaveLength(0);
+      expect(results.violations, formatViolations(results)).toHaveLength(0);
     });
 
     it("has zero axe violations — avatar skeleton in loading region", async () => {
@@ -115,10 +95,7 @@ describe("Skeleton — structural accessibility (Story 2.13 AC #7)", () => {
         </SkeletonRegion>,
       );
       const results = await runAxe(container);
-      expect(
-        results.violations,
-        results.violations.map((v) => `${v.id}: ${v.description}`).join("; "),
-      ).toHaveLength(0);
+      expect(results.violations, formatViolations(results)).toHaveLength(0);
     });
 
     it("has zero axe violations — CardSkeleton composite", async () => {
@@ -128,10 +105,7 @@ describe("Skeleton — structural accessibility (Story 2.13 AC #7)", () => {
         </SkeletonRegion>,
       );
       const results = await runAxe(container);
-      expect(
-        results.violations,
-        results.violations.map((v) => `${v.id}: ${v.description}`).join("; "),
-      ).toHaveLength(0);
+      expect(results.violations, formatViolations(results)).toHaveLength(0);
     });
 
     it("has zero axe violations — RouteSkeleton composite", async () => {
@@ -141,10 +115,7 @@ describe("Skeleton — structural accessibility (Story 2.13 AC #7)", () => {
         </SkeletonRegion>,
       );
       const results = await runAxe(container);
-      expect(
-        results.violations,
-        results.violations.map((v) => `${v.id}: ${v.description}`).join("; "),
-      ).toHaveLength(0);
+      expect(results.violations, formatViolations(results)).toHaveLength(0);
     });
 
     it("has zero axe violations — StreamSkeleton composite", async () => {
@@ -154,10 +125,7 @@ describe("Skeleton — structural accessibility (Story 2.13 AC #7)", () => {
         </SkeletonRegion>,
       );
       const results = await runAxe(container);
-      expect(
-        results.violations,
-        results.violations.map((v) => `${v.id}: ${v.description}`).join("; "),
-      ).toHaveLength(0);
+      expect(results.violations, formatViolations(results)).toHaveLength(0);
     });
   });
 });

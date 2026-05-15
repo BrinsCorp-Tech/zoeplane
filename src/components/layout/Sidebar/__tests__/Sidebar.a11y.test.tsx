@@ -18,31 +18,14 @@
  *   bun run test --reporter=verbose src/components/layout/Sidebar/__tests__/Sidebar.a11y.test.tsx
  */
 
-import axe from "axe-core";
 import { cleanup, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it } from "vitest";
+import { runAxe, formatViolations } from "@/test/helpers/runAxe";
 import { Sidebar } from "../Sidebar";
 
 afterEach(() => {
   cleanup();
 });
-
-async function runAxe(container: HTMLElement): Promise<axe.AxeResults> {
-  return new Promise((resolve, reject) => {
-    axe.run(
-      container,
-      {
-        rules: {
-          "color-contrast": { enabled: false },
-        },
-      },
-      (err, results) => {
-        if (err) reject(err);
-        else resolve(results);
-      },
-    );
-  });
-}
 
 describe("Sidebar — structural accessibility (Story 2.9 AC #9)", () => {
   // ── Landmark role ───────────────────────────────────────────────────────────
@@ -88,19 +71,13 @@ describe("Sidebar — structural accessibility (Story 2.9 AC #9)", () => {
     it("has zero axe violations — expanded state (default)", async () => {
       const { container } = render(<Sidebar />);
       const results = await runAxe(container);
-      expect(
-        results.violations,
-        results.violations.map((v) => `${v.id}: ${v.description}`).join("; "),
-      ).toHaveLength(0);
+      expect(results.violations, formatViolations(results)).toHaveLength(0);
     });
 
     it("has zero axe violations — with activeItemId", async () => {
       const { container } = render(<Sidebar activeItemId="skills" />);
       const results = await runAxe(container);
-      expect(
-        results.violations,
-        results.violations.map((v) => `${v.id}: ${v.description}`).join("; "),
-      ).toHaveLength(0);
+      expect(results.violations, formatViolations(results)).toHaveLength(0);
     });
 
     it("has zero axe violations — custom groups", async () => {
@@ -119,10 +96,7 @@ describe("Sidebar — structural accessibility (Story 2.9 AC #9)", () => {
         />,
       );
       const results = await runAxe(container);
-      expect(
-        results.violations,
-        results.violations.map((v) => `${v.id}: ${v.description}`).join("; "),
-      ).toHaveLength(0);
+      expect(results.violations, formatViolations(results)).toHaveLength(0);
     });
   });
 });

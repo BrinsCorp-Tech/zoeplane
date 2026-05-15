@@ -112,4 +112,3 @@ const Skeleton = React.forwardRef<HTMLSpanElement | HTMLDivElement, SkeletonProp
 Skeleton.displayName = "Skeleton";
 
 export { Skeleton };
-export default Skeleton;

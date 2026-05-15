@@ -207,5 +207,3 @@ export function HostShell({ children, className }: HostShellProps): React.ReactE
     </div>
   );
 }
-
-export default HostShell;

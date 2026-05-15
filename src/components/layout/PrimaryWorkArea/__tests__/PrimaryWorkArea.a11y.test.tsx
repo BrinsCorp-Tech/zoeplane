@@ -13,31 +13,14 @@
  *   bun run test --reporter=verbose src/components/layout/PrimaryWorkArea/__tests__/PrimaryWorkArea.a11y.test.tsx
  */
 
-import axe from "axe-core";
 import { cleanup, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it } from "vitest";
+import { runAxe, formatViolations } from "@/test/helpers/runAxe";
 import { PrimaryWorkArea } from "../PrimaryWorkArea";
 
 afterEach(() => {
   cleanup();
 });
-
-async function runAxe(container: HTMLElement): Promise<axe.AxeResults> {
-  return new Promise((resolve, reject) => {
-    axe.run(
-      container,
-      {
-        rules: {
-          "color-contrast": { enabled: false },
-        },
-      },
-      (err, results) => {
-        if (err) reject(err);
-        else resolve(results);
-      },
-    );
-  });
-}
 
 describe("PrimaryWorkArea — structural accessibility (Story 2.9 AC #9)", () => {
   // ── main landmark ───────────────────────────────────────────────────────────
@@ -84,10 +67,7 @@ describe("PrimaryWorkArea — structural accessibility (Story 2.9 AC #9)", () =>
     it("has zero axe violations — no children (placeholder)", async () => {
       const { container } = render(<PrimaryWorkArea />);
       const results = await runAxe(container);
-      expect(
-        results.violations,
-        results.violations.map((v) => `${v.id}: ${v.description}`).join("; "),
-      ).toHaveLength(0);
+      expect(results.violations, formatViolations(results)).toHaveLength(0);
     });
 
     it("has zero axe violations — with children", async () => {
@@ -98,10 +78,7 @@ describe("PrimaryWorkArea — structural accessibility (Story 2.9 AC #9)", () =>
         </PrimaryWorkArea>,
       );
       const results = await runAxe(container);
-      expect(
-        results.violations,
-        results.violations.map((v) => `${v.id}: ${v.description}`).join("; "),
-      ).toHaveLength(0);
+      expect(results.violations, formatViolations(results)).toHaveLength(0);
     });
   });
 });

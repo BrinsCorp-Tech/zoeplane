@@ -19,9 +19,9 @@
  *   bun run test --reporter=verbose src/components/ui/Modal/__tests__/Modal.a11y.test.tsx
  */
 
-import axe from "axe-core";
 import { cleanup, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it } from "vitest";
+import { runAxe, runAxeBody, formatViolations } from "@/test/helpers/runAxe";
 import {
   ModalClose,
   ModalContent,
@@ -36,43 +36,6 @@ import {
 afterEach(() => {
   cleanup();
 });
-
-async function runAxe(container: HTMLElement): Promise<axe.AxeResults> {
-  return new Promise((resolve, reject) => {
-    axe.run(
-      container,
-      {
-        rules: {
-          "color-contrast": { enabled: false },
-        },
-      },
-      (err, results) => {
-        if (err) reject(err);
-        else resolve(results);
-      },
-    );
-  });
-}
-
-// Body-scoped axe runner: disables "region" rule because Radix portals dialog
-// content to document.body outside any landmark — correct browser behaviour for overlays.
-async function runAxeBody(): Promise<axe.AxeResults> {
-  return new Promise((resolve, reject) => {
-    axe.run(
-      document.body,
-      {
-        rules: {
-          "color-contrast": { enabled: false },
-          region: { enabled: false },
-        },
-      },
-      (err, results) => {
-        if (err) reject(err);
-        else resolve(results);
-      },
-    );
-  });
-}
 
 // Helper: render an open modal (defaultOpen bypasses trigger interaction)
 function renderOpenModal(
@@ -125,19 +88,19 @@ describe("Modal — structural accessibility (Story 2.13 AC #7)", () => {
   // ── ModalClose button ─────────────────────────────────────────────────────────
 
   describe("ModalClose", () => {
-    it("renders the close button with aria-label='Close' (icon-only ×)", () => {
+    it("ModalClose carries aria-label='Close' with role=button", () => {
       render(
         <ModalRoot defaultOpen>
           <ModalContent>
             <ModalHeader>
               <ModalTitle>Settings</ModalTitle>
             </ModalHeader>
+            <ModalClose />
           </ModalContent>
         </ModalRoot>,
       );
-      // The built-in ModalClose × button is rendered by the content — check for it
-      // Note: ModalClose is not automatically rendered inside ModalContent — consumers add it.
-      // Test the explicit Close button pattern instead.
+      const closeButton = screen.getByRole("button", { name: "Close" });
+      expect(closeButton).toBeDefined();
     });
   });
 
@@ -169,20 +132,14 @@ describe("Modal — structural accessibility (Story 2.13 AC #7)", () => {
   describe("axe-core structural violations — zero expected", () => {
     it("has zero axe violations — open default dialog", async () => {
       renderOpenModal();
-      const results = await runAxeBody();
-      expect(
-        results.violations,
-        results.violations.map((v) => `${v.id}: ${v.description}`).join("; "),
-      ).toHaveLength(0);
+      const results = await runAxeBody({ region: { enabled: false } });
+      expect(results.violations, formatViolations(results)).toHaveLength(0);
     });
 
     it("has zero axe violations — open alertdialog", async () => {
       renderOpenModal({ variant: "destructive", role: "alertdialog" });
-      const results = await runAxeBody();
-      expect(
-        results.violations,
-        results.violations.map((v) => `${v.id}: ${v.description}`).join("; "),
-      ).toHaveLength(0);
+      const results = await runAxeBody({ region: { enabled: false } });
+      expect(results.violations, formatViolations(results)).toHaveLength(0);
     });
 
     it("has zero axe violations — closed modal (trigger only)", async () => {
@@ -200,10 +157,7 @@ describe("Modal — structural accessibility (Story 2.13 AC #7)", () => {
         </ModalRoot>,
       );
       const results = await runAxe(container);
-      expect(
-        results.violations,
-        results.violations.map((v) => `${v.id}: ${v.description}`).join("; "),
-      ).toHaveLength(0);
+      expect(results.violations, formatViolations(results)).toHaveLength(0);
     });
   });
 });

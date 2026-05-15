@@ -11,8 +11,7 @@ const badgeVariants = cva(
   {
     variants: {
       variant: {
-        default:
-          "border-transparent bg-primary text-primary-foreground hover:bg-primary/80",
+        default: "border-transparent bg-primary text-primary-foreground hover:bg-primary/80",
         secondary:
           "border-transparent bg-secondary text-secondary-foreground hover:bg-secondary/80",
         destructive:
@@ -29,8 +28,7 @@ const badgeVariants = cva(
 // ─── Props ────────────────────────────────────────────────────────────────────
 
 export interface BadgeProps
-  extends React.HTMLAttributes<HTMLSpanElement>,
-    VariantProps<typeof badgeVariants> {
+  extends React.HTMLAttributes<HTMLSpanElement>, VariantProps<typeof badgeVariants> {
   /**
    * When provided, renders a dismiss (×) button inside the badge.
    * The dismiss button has aria-label="Dismiss" and an inflated 32×32 hit area.
@@ -58,11 +56,7 @@ export interface BadgeProps
 const Badge = React.forwardRef<HTMLSpanElement, BadgeProps>(
   ({ className, variant, onDismiss, dismissLabel = "Dismiss", children, ...props }, ref) => {
     return (
-      <span
-        ref={ref}
-        className={cn(badgeVariants({ variant }), className)}
-        {...props}
-      >
+      <span ref={ref} className={cn(badgeVariants({ variant }), className)} {...props}>
         {children}
         {onDismiss && (
           <button
@@ -74,7 +68,7 @@ const Badge = React.forwardRef<HTMLSpanElement, BadgeProps>(
               // while expanding the hit area toward the 32×32 minimum.
               "-my-0.5 -mr-0.5 ml-0.5 rounded-full p-0.5",
               "hover:bg-hover-overlay",
-              "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1",
+              "focus-visible:ring-ring focus-visible:ring-2 focus-visible:ring-offset-1 focus-visible:outline-none",
             )}
           >
             <Icon name="x" size="xs" aria-hidden={true} />
@@ -88,4 +82,3 @@ const Badge = React.forwardRef<HTMLSpanElement, BadgeProps>(
 Badge.displayName = "Badge";
 
 export { Badge, badgeVariants };
-export default Badge;

@@ -20,31 +20,14 @@
  *   bun run test --reporter=verbose src/components/ui/Toast/__tests__/Toast.a11y.test.tsx
  */
 
-import axe from "axe-core";
 import { cleanup, render } from "@testing-library/react";
 import { afterEach, describe, expect, it } from "vitest";
+import { runAxe, formatViolations } from "@/test/helpers/runAxe";
 import { Toaster } from "../Toast";
 
 afterEach(() => {
   cleanup();
 });
-
-async function runAxe(container: HTMLElement): Promise<axe.AxeResults> {
-  return new Promise((resolve, reject) => {
-    axe.run(
-      container,
-      {
-        rules: {
-          "color-contrast": { enabled: false },
-        },
-      },
-      (err, results) => {
-        if (err) reject(err);
-        else resolve(results);
-      },
-    );
-  });
-}
 
 describe("Toast — structural accessibility (Story 2.13 AC #7)", () => {
   // ── Toaster mount ─────────────────────────────────────────────────────────────
@@ -62,10 +45,7 @@ describe("Toast — structural accessibility (Story 2.13 AC #7)", () => {
       render(<Toaster />);
       // Sonner portals to document.body — scan from there
       const results = await runAxe(document.body);
-      expect(
-        results.violations,
-        results.violations.map((v) => `${v.id}: ${v.description}`).join("; "),
-      ).toHaveLength(0);
+      expect(results.violations, formatViolations(results)).toHaveLength(0);
     });
 
     it("has zero axe violations — Toaster with theme attribute set (light)", async () => {
@@ -73,10 +53,7 @@ describe("Toast — structural accessibility (Story 2.13 AC #7)", () => {
       render(<Toaster />);
       const results = await runAxe(document.body);
       document.documentElement.removeAttribute("data-theme");
-      expect(
-        results.violations,
-        results.violations.map((v) => `${v.id}: ${v.description}`).join("; "),
-      ).toHaveLength(0);
+      expect(results.violations, formatViolations(results)).toHaveLength(0);
     });
 
     it("has zero axe violations — Toaster with theme attribute set (dark)", async () => {
@@ -84,10 +61,7 @@ describe("Toast — structural accessibility (Story 2.13 AC #7)", () => {
       render(<Toaster />);
       const results = await runAxe(document.body);
       document.documentElement.removeAttribute("data-theme");
-      expect(
-        results.violations,
-        results.violations.map((v) => `${v.id}: ${v.description}`).join("; "),
-      ).toHaveLength(0);
+      expect(results.violations, formatViolations(results)).toHaveLength(0);
     });
   });
 });

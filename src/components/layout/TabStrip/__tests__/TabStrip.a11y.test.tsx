@@ -19,9 +19,9 @@
  *   bun run test --reporter=verbose src/components/layout/TabStrip/__tests__/TabStrip.a11y.test.tsx
  */
 
-import axe from "axe-core";
 import { cleanup, render, screen, fireEvent } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { runAxe, formatViolations } from "@/test/helpers/runAxe";
 import { TabStrip } from "../TabStrip";
 import { useAppStore } from "@/stores/app";
 
@@ -33,23 +33,6 @@ afterEach(() => {
 beforeEach(() => {
   useAppStore.setState({ tabs: [], activeTabId: null });
 });
-
-async function runAxe(container: HTMLElement): Promise<axe.AxeResults> {
-  return new Promise((resolve, reject) => {
-    axe.run(
-      container,
-      {
-        rules: {
-          "color-contrast": { enabled: false },
-        },
-      },
-      (err, results) => {
-        if (err) reject(err);
-        else resolve(results);
-      },
-    );
-  });
-}
 
 describe("TabStrip — structural accessibility (Story 2.9)", () => {
   // ── tablist role (populated state) ──────────────────────────────────────────
@@ -159,19 +142,13 @@ describe("TabStrip — structural accessibility (Story 2.9)", () => {
     it("has zero axe violations — 0 tabs (empty state, no tablist)", async () => {
       const { container } = render(<TabStrip tabs={[]} />);
       const results = await runAxe(container);
-      expect(
-        results.violations,
-        results.violations.map((v) => `${v.id}: ${v.description}`).join("; "),
-      ).toHaveLength(0);
+      expect(results.violations, formatViolations(results)).toHaveLength(0);
     });
 
     it("has zero axe violations — 1 tab", async () => {
       const { container } = render(<TabStrip tabs={[{ id: "t1", title: "skills" }]} />);
       const results = await runAxe(container);
-      expect(
-        results.violations,
-        results.violations.map((v) => `${v.id}: ${v.description}`).join("; "),
-      ).toHaveLength(0);
+      expect(results.violations, formatViolations(results)).toHaveLength(0);
     });
 
     it("has zero axe violations — 3 tabs", async () => {
@@ -185,10 +162,7 @@ describe("TabStrip — structural accessibility (Story 2.9)", () => {
         />,
       );
       const results = await runAxe(container);
-      expect(
-        results.violations,
-        results.violations.map((v) => `${v.id}: ${v.description}`).join("; "),
-      ).toHaveLength(0);
+      expect(results.violations, formatViolations(results)).toHaveLength(0);
     });
 
     it("has zero axe violations — many tabs (overflow scenario)", async () => {
@@ -201,10 +175,7 @@ describe("TabStrip — structural accessibility (Story 2.9)", () => {
         />,
       );
       const results = await runAxe(container);
-      expect(
-        results.violations,
-        results.violations.map((v) => `${v.id}: ${v.description}`).join("; "),
-      ).toHaveLength(0);
+      expect(results.violations, formatViolations(results)).toHaveLength(0);
     });
   });
 });

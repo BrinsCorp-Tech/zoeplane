@@ -22,9 +22,9 @@
  *   bun run test --reporter=verbose src/components/library-shell/__tests__/LibraryShell.a11y.test.tsx
  */
 
-import axe from "axe-core";
 import { cleanup, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it } from "vitest";
+import { runAxe, formatViolations } from "@/test/helpers/runAxe";
 import { LibraryShell } from "../LibraryShell";
 
 // Unmount React trees between tests — prevents "found multiple elements" errors.
@@ -65,27 +65,6 @@ function ErrorSlot({ onRetry }: { onRetry: () => void }) {
       <button onClick={onRetry}>Retry</button>
     </div>
   );
-}
-
-// ─── axe helper ───────────────────────────────────────────────────────────────
-
-async function runAxe(container: HTMLElement): Promise<axe.AxeResults> {
-  return new Promise((resolve, reject) => {
-    axe.run(
-      container,
-      {
-        rules: {
-          // Disabled: JSDOM cannot compute OKLCH CSS custom property values.
-          // Contrast verification deferred to Story 2.13 in-browser test.
-          "color-contrast": { enabled: false },
-        },
-      },
-      (err, results) => {
-        if (err) reject(err);
-        else resolve(results);
-      },
-    );
-  });
 }
 
 // ─── Tests ────────────────────────────────────────────────────────────────────
@@ -465,10 +444,7 @@ describe("LibraryShell — structural accessibility (Story 2.11 AC #11)", () => 
         />,
       );
       const results = await runAxe(container);
-      expect(
-        results.violations,
-        results.violations.map((v) => `${v.id}: ${v.description}`).join("; "),
-      ).toHaveLength(0);
+      expect(results.violations, formatViolations(results)).toHaveLength(0);
     });
 
     it("has zero axe violations — LOADING state (12 CardSkeletons in status region)", async () => {
@@ -483,10 +459,7 @@ describe("LibraryShell — structural accessibility (Story 2.11 AC #11)", () => 
         />,
       );
       const results = await runAxe(container);
-      expect(
-        results.violations,
-        results.violations.map((v) => `${v.id}: ${v.description}`).join("; "),
-      ).toHaveLength(0);
+      expect(results.violations, formatViolations(results)).toHaveLength(0);
     });
 
     it("has zero axe violations — EMPTY state", async () => {
@@ -501,10 +474,7 @@ describe("LibraryShell — structural accessibility (Story 2.11 AC #11)", () => 
         />,
       );
       const results = await runAxe(container);
-      expect(
-        results.violations,
-        results.violations.map((v) => `${v.id}: ${v.description}`).join("; "),
-      ).toHaveLength(0);
+      expect(results.violations, formatViolations(results)).toHaveLength(0);
     });
 
     it("has zero axe violations — ERROR state (errorState slot with role=alert)", async () => {
@@ -519,10 +489,7 @@ describe("LibraryShell — structural accessibility (Story 2.11 AC #11)", () => 
         />,
       );
       const results = await runAxe(container);
-      expect(
-        results.violations,
-        results.violations.map((v) => `${v.id}: ${v.description}`).join("; "),
-      ).toHaveLength(0);
+      expect(results.violations, formatViolations(results)).toHaveLength(0);
     });
 
     it("has zero axe violations — POPULATED with tabs (role=tablist + role=list coexist)", async () => {
@@ -547,10 +514,7 @@ describe("LibraryShell — structural accessibility (Story 2.11 AC #11)", () => 
         />,
       );
       const results = await runAxe(container);
-      expect(
-        results.violations,
-        results.violations.map((v) => `${v.id}: ${v.description}`).join("; "),
-      ).toHaveLength(0);
+      expect(results.violations, formatViolations(results)).toHaveLength(0);
     });
 
     it("has zero axe violations — no chrome (no search, no tabs)", async () => {
@@ -564,10 +528,7 @@ describe("LibraryShell — structural accessibility (Story 2.11 AC #11)", () => 
         />,
       );
       const results = await runAxe(container);
-      expect(
-        results.violations,
-        results.violations.map((v) => `${v.id}: ${v.description}`).join("; "),
-      ).toHaveLength(0);
+      expect(results.violations, formatViolations(results)).toHaveLength(0);
     });
   });
 });
