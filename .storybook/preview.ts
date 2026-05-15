@@ -11,7 +11,7 @@ const preview: Preview = {
         icon: "circlehollow",
         items: [
           { value: "light", title: "Light" },
-          { value: "dark",  title: "Dark"  },
+          { value: "dark", title: "Dark" },
           { value: "system", title: "System" },
         ],
         dynamicTitle: true,
@@ -25,7 +25,7 @@ const preview: Preview = {
         icon: "speed",
         items: [
           { value: "default", title: "Default" },
-          { value: "reduce",  title: "Reduce"  },
+          { value: "reduce", title: "Reduce" },
         ],
         dynamicTitle: true,
       },
@@ -46,14 +46,6 @@ const preview: Preview = {
       return Story();
     },
   ],
-  parameters: {
-    chromatic: {
-      modes: {
-        light: { theme: "light" },
-        dark:  { theme: "dark"  },
-      },
-    },
-  },
 };
 
 export default preview;

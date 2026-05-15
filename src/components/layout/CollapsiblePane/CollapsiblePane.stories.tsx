@@ -145,13 +145,10 @@ export const HorizontalExpandedDark: Story = {
   ),
 };
 
-// ─── Reduced-motion story (for Chromatic snapshot with prefers-reduced-motion) ─
+// ─── Reduced-motion story ─────────────────────────────────────────────────────
 
 export const ReducedMotion: Story = {
   name: "Horizontal — Reduced motion (transition-duration: 0ms)",
-  parameters: {
-    chromatic: { prefersReducedMotion: "reduce" },
-  },
   render: () => (
     <div
       data-theme="light"

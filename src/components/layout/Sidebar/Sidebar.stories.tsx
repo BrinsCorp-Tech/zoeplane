@@ -73,7 +73,7 @@ export const CollapsedLight: Story = {
     </div>
   ),
   parameters: {
-    // Set localStorage before story renders for Chromatic collapsed snapshot
+    // Pre-set collapsed state so the story renders in the collapsed position.
     beforeEach: async () => {
       localStorage.setItem("zoeplane:sidebar:collapsed", "true");
     },
@@ -121,9 +121,6 @@ export const CollapsedDark: Story = {
 
 export const ReducedMotion: Story = {
   name: "Reduced motion (no transition animation)",
-  parameters: {
-    chromatic: { prefersReducedMotion: "reduce" },
-  },
   render: () => (
     <div
       data-theme="light"

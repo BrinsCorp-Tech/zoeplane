@@ -153,9 +153,6 @@ export const NoSelection: Story = {
 
 export const ReducedMotion: Story = {
   name: "Reduced motion (no transition animation)",
-  parameters: {
-    chromatic: { prefersReducedMotion: "reduce" },
-  },
   render: () => (
     <div
       data-theme="light"

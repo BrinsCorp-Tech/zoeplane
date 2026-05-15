@@ -9,6 +9,17 @@ Versioning: [Semantic Versioning](https://semver.org/)
 
 ## [Unreleased]
 
+### Sprint 3 (2026-05-15 → ongoing)
+
+#### Removed
+
+- **Chromatic visual regression** (Story H.1): Removed `.github/workflows/chromatic.yml`, `@chromatic-com/storybook@3`, and `chromatic@11` from `devDependencies`. Chromatic ran in advisory mode throughout Sprint 2 and the `CHROMATIC_PROJECT_TOKEN` GHA secret was never provisioned. Cost-benefit does not favor it for a single-operator OSS Tauri desktop app at this scale — manual visual smoke at component-batch boundaries proved to be the load-bearing gate (Sprint 2 empirical record: four scaffold bugs caught by smoke that all automated gates missed). Locked by **ADR-006** (Visual Coverage Posture — Manual Smoke at Batch Boundaries). Deleted orphaned artifacts: `docs/runbooks/chromatic-baseline-lock.md`, `docs/stories/epic-02/story-2.21-final-baseline-lock-backlog.md`. Stripped `parameters: { chromatic: {...} }` blocks from 9 stories files.
+
+#### Added
+
+- **`@storybook/addon-a11y`** (Story H.1): Added `@storybook/addon-a11y@10.4.0` to devDependencies and registered it in `.storybook/main.ts`. Provides in-browser axe-core violation review in the Storybook Accessibility panel — the automated a11y surface post-Chromatic (alongside `src/test/helpers/runAxe.ts` unit-test helper). Locked by ADR-006.
+- **ADR-006** (2026-05-15): Visual Coverage Posture — Manual Smoke at Batch Boundaries. Removes Chromatic and locks the visual-regression approach: manual smoke at component-batch boundaries (primary gate) + `@storybook/addon-a11y` panel + `runAxe.ts` unit tests (automated a11y). Posture revisited at N=3 active maintainers. Amends ADR-004 §5. See `docs/architecture/decisions/ADR-006-visual-coverage-posture.md`.
+
 ### Sprint 2 (2026-05-11 → 2026-05-15)
 
 Sprint 2 delivered the complete design system foundation: a DTCG W3C v1 three-tier token architecture with OKLCH primitives, 16 foundation-tier and 9 layout-tier UI components, the HostShell composition root, a 41-animation catalog, WCAG 2.2 AA contrast enforcement, and per-component axe-core structural accessibility tests. Infrastructure additions include a reusable CI build-matrix workflow, Chromatic visual regression in advisory mode, PostCSS configuration consolidation, and `Cargo.lock` policy resolution. Locked by ADR-004 (Design System Architecture).
