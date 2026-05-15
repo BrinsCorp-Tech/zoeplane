@@ -152,9 +152,6 @@ export const GridLayout: Story = {
 
 export const ReducedMotion: Story = {
   name: "Reduced motion (static muted fill)",
-  parameters: {
-    chromatic: { prefersReducedMotion: "reduce" },
-  },
   decorators: [
     (StoryFn) => (
       <div>

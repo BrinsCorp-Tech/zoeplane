@@ -58,11 +58,11 @@ All primitive color values use the **OKLCH color space** (perceptually uniform, 
 
 shadcn/ui installation and component adaptation land in **Story 2.5** — this ADR establishes the selection, not the implementation. The key constraint: shadcn/ui components must be modified to reference `--color-*` semantic tokens rather than shadcn's default CSS variable names (which are Tailwind-centric and HSL-based).
 
-### 5. Visual regression validation: Storybook 8 + Chromatic
+### 5. Visual regression validation: Storybook 8 + manual smoke (ADR-006)
 
-**Storybook 8** is the component development environment. **Chromatic** is the visual regression service. Together they form the validation surface for every Foundation and Layout tier component in Epic 02.
+**Storybook 8** is the component development environment. Storybook 8 installation landed in **Story 2.4** alongside a Chromatic advisory workflow.
 
-Storybook 8 + Chromatic installation land in **Story 2.4**. Every component story authored in Epics 02+ must include a Storybook story that exercises both light and dark themes. Chromatic runs on every PR and blocks merge on visual regression.
+**Sprint 3 amendment (ADR-006):** Chromatic was removed (Story H.1). Visual regression is now covered by manual visual smoke at component-batch boundaries. The `@storybook/addon-a11y` panel provides automated axe-core review in-browser. See `docs/architecture/decisions/ADR-006-visual-coverage-posture.md` for the full decision. Every component story authored in Epics 02+ must include a Storybook story that exercises both light and dark themes.
 
 ## Consequences
 
@@ -73,13 +73,13 @@ Storybook 8 + Chromatic installation land in **Story 2.4**. Every component stor
 - Style Dictionary v4 gives us a programmable formatter — the custom formatter in `style-dictionary.config.mjs` emits the exact `@layer` structure the Tailwind v4 pipeline expects, with no loss of fidelity.
 - The gitignore + pre-commit hook pair closes the hand-edit escape: the only way to change tokens is to edit the seed JSON and rebuild, which keeps the CSS output deterministic.
 - shadcn/ui's accessibility contract (Radix UI under the hood) satisfies PRD FR-060 and ux-discovery a11y §4 requirements without requiring custom keyboard navigation or ARIA implementations.
-- Storybook + Chromatic provide a visual CI gate before users see the app — this was absent in Sprint 1 and is the primary regression-prevention mechanism for Sprint 2+ component work.
+- Storybook 8 provides an interactive component development environment. Manual visual smoke at batch boundaries (ADR-006) is the primary regression-prevention gate for Sprint 2+ component work.
 
 **Negative:**
 
 - Custom Style Dictionary formatter means the formatted CSS output is authored in JavaScript, not templated in DTCG JSON. Consequence: non-color tokens (typography, spacing, layout) are static in the formatter rather than driven from JSON. This is an accepted tradeoff for semantic equivalence with the hand-authored file; the plan is to migrate these layers to JSON in a later sprint when Figma Variables are authored for typography and spacing. **Motion tokens fulfilled (Story 2.12, 2026-05-14):** The 6 motion primitive tokens (`--motion-duration-fast/base/slow`, `--motion-easing-standard/decelerate/accelerate`) were added to `tokens.seed.json` and emitted by the Style Dictionary pipeline as part of the animation library — motion is now JSON-driven, ahead of the typography/spacing migration.
 - shadcn/ui's default CSS variable names conflict with ZoePlane's token namespace. Every component from shadcn must be adapted. This is expected effort; the component migration guide will be added to the sprint-context for Epic 02 component stories.
-- Chromatic requires a project token (GHA secret). This is a deployment concern, not a code concern, and is listed in the Sprint 2 carryover GHA secrets checklist.
+- Chromatic was removed in Sprint 3 (ADR-006). The `CHROMATIC_PROJECT_TOKEN` secret was never provisioned; cost-benefit did not favor it for a single-operator OSS desktop app at this scale.
 
 **Neutral:**
 

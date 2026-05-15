@@ -138,23 +138,9 @@ export const ColorInheritance: Story = {
 
 export const ReducedMotion: Story = {
   name: "Reduced motion (static 270° arc)",
-  parameters: {
-    // Force prefers-reduced-motion: reduce in this story.
-    // The Tailwind motion-reduce:animate-none utility removes the spin keyframe;
-    // the static arc (border-current / border-t-transparent geometry) is preserved.
-    chromatic: { prefersReducedMotion: "reduce" },
-  },
   decorators: [
     (StoryFn) => (
-      <div
-        style={
-          {
-            // Inject the media query override via a style tag in the decorator root.
-            // Storybook's chromatic parameter handles this for CI snapshots;
-            // this CSS custom property signals intent for manual review.
-          } as React.CSSProperties
-        }
-      >
+      <div>
         <style>{`@media (prefers-reduced-motion: reduce) { * { animation: none !important; } }`}</style>
         <div className="space-y-4">
           <p className="text-muted-foreground text-sm">

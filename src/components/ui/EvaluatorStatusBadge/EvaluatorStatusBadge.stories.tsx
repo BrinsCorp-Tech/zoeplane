@@ -1,16 +1,11 @@
 /**
- * EvaluatorStatusBadge stories — Chromatic baseline matrix + documentation.
- *
- * Baseline (Chromatic visual regression targets): stories 1–8 produce 16 snapshots.
- * Chromatic's global modes config in .storybook/preview.ts captures both
- * light + dark themes per story automatically — each of the 8 stories yields 2
- * snapshots (light, dark) = 16 total, satisfying Story 2.7 AC #3.
+ * EvaluatorStatusBadge stories — visual-coverage baseline + documentation.
  *
  * Story groups:
  *   1–4  EvaluatorStatus mode — Hook consumer (4 canonical states)
  *   5–8  ValidityOnly mode   — Command consumer (4 states)
- *   9–10 Forced-colors       — non-Chromatic, manual review + a11y test coverage
- *  11–14 Documentation       — non-Chromatic, design-system docs site grid views
+ *   9–10 Forced-colors       — manual review + a11y test coverage
+ *  11–14 Documentation       — design-system docs site grid views
  *
  * @see docs/design/components/EvaluatorStatusBadge-spec.md §8.3
  */
@@ -26,9 +21,6 @@ const meta: Meta<typeof EvaluatorStatusBadge> = {
   tags: ["autodocs"],
   parameters: {
     layout: "centered",
-    // Global preview.ts Chromatic modes (light + dark) apply to all stories.
-    // Stories 1–8 are the 16-snapshot regression baseline (8 stories × 2 themes).
-    chromatic: { disableSnapshot: false },
   },
 };
 
@@ -40,7 +32,7 @@ type Story = StoryObj<typeof EvaluatorStatusBadge>;
 // SECTION 1 — EvaluatorStatus / Hook (baseline stories 1–4)
 //   P0 first consumer: HookCard (Sprint 8.5). 4 representative states here;
 //   full 7-state grid rendered in the Documentation section (story 11).
-//   Each story is captured in both themes by Chromatic's global modes config.
+//   Theme toggle in Storybook toolbar captures both themes manually.
 // =============================================================================
 
 // Story 1 — Hook / Approved
@@ -78,7 +70,7 @@ export const EvaluatorStatusHookNeedsReEvaluation: Story = {
 // =============================================================================
 // SECTION 2 — ValidityOnly / Command (baseline stories 5–8)
 //   CommandCard is the most contrastive consumer of validity-only mode.
-//   Each story captured in both themes by Chromatic's global modes config.
+//   Theme toggle in Storybook toolbar captures both themes manually.
 // =============================================================================
 
 // Story 5 — Command / Valid
@@ -113,8 +105,7 @@ export const ValidityOnlyCommandPending: Story = {
 
 // =============================================================================
 // SECTION 3 — Forced-colors mode (stories 9–10)
-//   Non-baseline: Chromatic snapshots disabled. These exist for manual review
-//   of the WCAG forced-colors non-color-only signaling requirement.
+//   Non-baseline: these exist for manual review of forced-colors a11y contract.
 //   The companion a11y test (EvaluatorStatusBadge.a11y.test.tsx) covers the
 //   structural contract that must hold in forced-colors environments.
 // =============================================================================
@@ -148,7 +139,6 @@ const ForcedColorsDecorator = (Story: () => React.ReactNode) => (
 // Story 9 — ForcedColors / EvaluatorStatus / Hook / Quarantined
 export const ForcedColorsEvaluatorStatusHookQuarantined: Story = {
   name: "ForcedColors / EvaluatorStatus / Hook / Quarantined",
-  parameters: { chromatic: { disableSnapshot: true } },
   decorators: [ForcedColorsDecorator],
   render: () => (
     <EvaluatorStatusBadge mode="evaluator-status" resourceType="hook" state="quarantined" />
@@ -158,7 +148,6 @@ export const ForcedColorsEvaluatorStatusHookQuarantined: Story = {
 // Story 10 — ForcedColors / ValidityOnly / Command / Invalid
 export const ForcedColorsValidityOnlyCommandInvalid: Story = {
   name: "ForcedColors / ValidityOnly / Command / Invalid",
-  parameters: { chromatic: { disableSnapshot: true } },
   decorators: [ForcedColorsDecorator],
   render: () => (
     <EvaluatorStatusBadge mode="validity-only" resourceType="command" state="invalid" />
@@ -167,14 +156,12 @@ export const ForcedColorsValidityOnlyCommandInvalid: Story = {
 
 // =============================================================================
 // SECTION 4 — Documentation stories (stories 11–14)
-//   Non-Chromatic grid views for the design-system docs site.
-//   NOT counted in the 16-snapshot Chromatic baseline (spec §8.3).
+//   Documentation grid views for the design-system docs site.
 // =============================================================================
 
 // Story 11 — Documentation / AllHookStates
 export const DocumentationAllHookStates: Story = {
   name: "Documentation / AllHookStates",
-  parameters: { chromatic: { disableSnapshot: true } },
   render: () => (
     <div className="flex flex-col gap-3">
       <p className="text-foreground-muted text-xs font-medium tracking-wide uppercase">
@@ -204,7 +191,6 @@ export const DocumentationAllHookStates: Story = {
 // Story 12 — Documentation / AllSkillAndAgentStates
 export const DocumentationAllSkillAndAgentStates: Story = {
   name: "Documentation / AllSkillAndAgentStates",
-  parameters: { chromatic: { disableSnapshot: true } },
   render: () => (
     <div className="flex flex-col gap-4">
       <div className="flex flex-col gap-2">
@@ -262,7 +248,6 @@ export const DocumentationAllSkillAndAgentStates: Story = {
 // Story 13 — Documentation / TypeSignaturePlayground
 export const DocumentationTypeSignaturePlayground: Story = {
   name: "Documentation / TypeSignaturePlayground",
-  parameters: { chromatic: { disableSnapshot: true } },
   args: {
     mode: "evaluator-status",
     resourceType: "hook",
@@ -299,7 +284,6 @@ export const DocumentationTypeSignaturePlayground: Story = {
 // Story 14 — Documentation / CardComposition
 export const DocumentationCardComposition: Story = {
   name: "Documentation / CardComposition",
-  parameters: { chromatic: { disableSnapshot: true } },
   render: () => (
     <article
       aria-labelledby="doc-card-name"

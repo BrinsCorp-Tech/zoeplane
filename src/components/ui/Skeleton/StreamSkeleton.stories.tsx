@@ -82,9 +82,6 @@ export const LongStream: Story = {
 
 export const ReducedMotion: Story = {
   name: "Reduced motion (static muted fill — opacity tapering preserved)",
-  parameters: {
-    chromatic: { prefersReducedMotion: "reduce" },
-  },
   decorators: [
     (StoryFn) => (
       <div>

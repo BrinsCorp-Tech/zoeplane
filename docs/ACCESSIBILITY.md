@@ -148,12 +148,13 @@ The following patterns are used throughout the component library:
 
 ## Storybook Accessibility Tooling
 
-Storybook 8 (`.storybook/main.ts` + `.storybook/preview.ts`) ships two global decorators relevant to accessibility:
+Storybook 8 (`.storybook/main.ts` + `.storybook/preview.ts`) ships two global decorators and the `@storybook/addon-a11y` panel, all relevant to accessibility:
 
 - **Theme toggle** — switches `data-theme` on the story container between `"light"` and `"dark"`. Allows manual visual inspection of contrast in both themes.
 - **Reduced-motion toggle** — adds/removes the `.prefers-reduced-motion` class on the story container, triggering the class-based animation overrides without requiring an OS-level media query change.
+- **Accessibility panel** (`@storybook/addon-a11y`) — runs `axe-core` against the rendered story and surfaces violations in the Storybook Accessibility tab. This is the primary automated a11y surface for interactive manual review. It complements the `runAxe` unit tests by providing a visual, in-browser view of axe results.
 
-Chromatic visual regression (`docs/runbooks/chromatic-baseline-lock.md`) captures both themes × both motion modes in the baseline matrix once `CHROMATIC_PROJECT_TOKEN` is provisioned.
+Visual regression is covered by manual visual smoke at component-batch boundaries (ADR-006). See `docs/architecture/decisions/ADR-006-visual-coverage-posture.md` for the full posture decision.
 
 ## Known Limitations
 
@@ -194,4 +195,4 @@ See `docs/SECURITY.md` for the security contact. Accessibility issues that are n
 
 ---
 
-_Last reviewed: 2026-05-15 by tech-writer agent against Sprint 2 (Stories 2.1, 2.4, 2.5, 2.6, 2.7, 2.8, 2.9, 2.10, 2.11, 2.12, 2.13; ADR-004)._
+_Last reviewed: 2026-05-15 by sprint-programmer against Sprint 3 (Story H.1; Chromatic removal, ADR-006 visual coverage posture, @storybook/addon-a11y added)._

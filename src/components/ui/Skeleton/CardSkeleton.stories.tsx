@@ -56,9 +56,6 @@ export const Grid: Story = {
 
 export const ReducedMotion: Story = {
   name: "Reduced motion (static muted fill, no shimmer)",
-  parameters: {
-    chromatic: { prefersReducedMotion: "reduce" },
-  },
   decorators: [
     (StoryFn) => (
       <div>
