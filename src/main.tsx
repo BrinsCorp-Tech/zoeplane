@@ -6,13 +6,27 @@ import ReactDOM from "react-dom/client";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { ReactQueryDevtools } from "@tanstack/react-query-devtools";
 import App from "./App";
+import { ThemeProvider } from "./components/theme/ThemeProvider";
+import { Toaster } from "./components/ui/Toast/Toast";
 import { useAppStore } from "./stores/app";
+import { useCommandPaletteStore } from "./stores/commandPalette";
+import { useNotificationsStore } from "./stores/notifications";
 import "./styles/globals.css";
 
 // Expose the store at module scope so it is accessible from the root component
 // tree (AC #2). Domain code should import useAppStore directly — this
 // reference prevents tree-shaking from eliminating the import.
 void useAppStore.getState;
+
+// DEV-mode store exposure for devtools-driven smoke testing (Story 2.22).
+// Tree-shaken in production builds — not included in shipped bundles.
+if (import.meta.env.DEV) {
+  Object.assign(window as unknown as Record<string, unknown>, {
+    useAppStore,
+    useCommandPaletteStore,
+    useNotificationsStore,
+  });
+}
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -29,8 +43,11 @@ const queryClient = new QueryClient({
 ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(
   <React.StrictMode>
     <QueryClientProvider client={queryClient}>
-      <App />
-      {import.meta.env.DEV && <ReactQueryDevtools initialIsOpen={false} />}
+      <ThemeProvider>
+        <App />
+        <Toaster />
+        {import.meta.env.DEV && <ReactQueryDevtools initialIsOpen={false} />}
+      </ThemeProvider>
     </QueryClientProvider>
-  </React.StrictMode>
+  </React.StrictMode>,
 );

@@ -11,19 +11,15 @@
  */
 
 @import "./tokens.css";
+@import "./animations.css";
 @import "./typography.css";
+@import "./grids.css";
 
 /* Tailwind v4 CSS-first directives */
 @import "tailwindcss";
-
-/* ---- Baseline reset ---- */
-*,
-*::before,
-*::after {
-  box-sizing: border-box;
-  margin: 0;
-  padding: 0;
-}
+/* Wire the JS config so semantic color utilities (bg-input, border-border, etc.) generate.
+   Without @config, Tailwind v4 does NOT auto-discover tailwind.config.ts. */
+@config "../tailwind.config.ts";
 
 html {
   font-size: 100%; /* 16px base; fluid type uses rem + vw via clamp() */
@@ -127,7 +123,7 @@ button:disabled {
 }
 
 /* ---- Reduced-motion: disable ALL animations as a safety net ----
-   Individual components use CSS vars (--duration-*) which zero out via
+   Individual components use CSS vars (--motion-duration-*) which zero out via
    the tokens.css @media block. This rule catches any hardcoded transitions. */
 @media (prefers-reduced-motion: reduce) {
   *,
@@ -138,4 +134,16 @@ button:disabled {
     transition-duration: 0.01ms !important;
     scroll-behavior: auto !important;
   }
+}
+
+/* Class-based reduced-motion variant — mirrors the @media rule above.
+   Used by Storybook's "Reduced motion" toolbar to force the variant even
+   when the OS preference is not set. Applied to <html> by preview.ts decorator. */
+.prefers-reduced-motion *,
+.prefers-reduced-motion *::before,
+.prefers-reduced-motion *::after {
+  animation-duration: 0.01ms !important;
+  animation-iteration-count: 1 !important;
+  transition-duration: 0.01ms !important;
+  scroll-behavior: auto !important;
 }

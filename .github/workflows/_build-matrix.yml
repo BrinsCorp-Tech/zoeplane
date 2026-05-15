@@ -1,0 +1,195 @@
+name: Build Matrix (reusable)
+
+# Reusable workflow — called from ci.yml (PR gate) and nightly.yml (scheduled).
+# Extracts the duplicated lint / typecheck / test / build matrix that previously
+# lived verbatim in both files (Sprint 1 MED-3 carryover).
+#
+# Callers pass:
+#   checkout-ref          — git ref to check out (default: "" = the triggering ref)
+#   artifact-retention-days — how long to retain Tauri build artifacts (default: 7)
+
+on:
+  workflow_call:
+    inputs:
+      checkout-ref:
+        description: "Git ref to check out (leave empty for the triggering ref)"
+        type: string
+        required: false
+        default: ""
+      artifact-retention-days:
+        description: "Days to retain uploaded Tauri build artifacts"
+        type: number
+        required: false
+        default: 7
+      artifact-name-prefix:
+        description: "Prefix for uploaded artifact names (e.g. 'tauri-artifacts' or 'nightly-artifacts')"
+        type: string
+        required: false
+        default: "tauri-artifacts"
+
+jobs:
+  # ──────────────────────────────────────────────────────────────────────────────
+  # lint: ESLint flat config across all workspaces
+  # ──────────────────────────────────────────────────────────────────────────────
+  lint:
+    name: Lint (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-latest, windows-latest, ubuntu-22.04]
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.checkout-ref }}
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v1
+        with:
+          bun-version: latest
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Lint (ESLint)
+        run: bun run lint
+
+  # ──────────────────────────────────────────────────────────────────────────────
+  # typecheck: tsc --noEmit across all workspaces
+  # ──────────────────────────────────────────────────────────────────────────────
+  typecheck:
+    name: Typecheck (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-latest, windows-latest, ubuntu-22.04]
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.checkout-ref }}
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v1
+        with:
+          bun-version: latest
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Typecheck (tsc --noEmit)
+        run: bun run typecheck
+
+  # ──────────────────────────────────────────────────────────────────────────────
+  # test: Vitest unit tests across all platforms
+  # ──────────────────────────────────────────────────────────────────────────────
+  test:
+    name: Unit Tests (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-latest, windows-latest, ubuntu-22.04]
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.checkout-ref }}
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v1
+        with:
+          bun-version: latest
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Unit tests (Vitest)
+        run: bun run test
+
+  # ──────────────────────────────────────────────────────────────────────────────
+  # build: unsigned Tauri platform builds
+  # A failure here indicates a platform-specific compilation issue, not a code
+  # quality failure.  Step names are explicit to distinguish infra failures from
+  # code-level failures in the run log.
+  # ──────────────────────────────────────────────────────────────────────────────
+  build:
+    name: Build (${{ matrix.os }})
+    needs: [lint, typecheck, test]
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-latest, windows-latest, ubuntu-22.04]
+        include:
+          - os: macos-latest
+            bundles: app
+          - os: windows-latest
+            bundles: msi,nsis
+          - os: ubuntu-22.04
+            bundles: deb,rpm
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.checkout-ref }}
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v1
+        with:
+          bun-version: latest
+
+      - name: Install Linux system dependencies
+        if: matrix.os == 'ubuntu-22.04'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libwebkit2gtk-4.1-dev \
+            libappindicator3-dev \
+            librsvg2-dev \
+            patchelf
+
+      - name: Setup Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Rust cache
+        uses: swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+
+      - name: Install frontend dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Build UI
+        run: bun run --cwd src build
+
+      - name: Build sidecar (bun single-binary)
+        # Produces sidecar/dist/zoeplane-sidecar — bundled for the target platform.
+        # The binary is embedded by Tauri via the `externalBin` config in tauri.conf.json.
+        run: bun run --cwd sidecar build
+
+      - name: Tauri build (unsigned)
+        # Unsigned builds only — signed releases are handled by release.yml (Story 1.5).
+        # --bundles overrides tauri.conf.json bundle.targets for this invocation only,
+        # excluding dmg (macOS) and appimage (Linux) which are flaky on GHA runners.
+        # Signed release.yml reads bundle.targets in full and produces all 7 formats.
+        uses: tauri-apps/tauri-action@v0
+        with:
+          args: --bundles ${{ matrix.bundles }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Upload Tauri artifacts
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: ${{ inputs.artifact-name-prefix }}-${{ matrix.os }}
+          path: src-tauri/target/release/bundle/
+          if-no-files-found: ignore
+          retention-days: ${{ inputs.artifact-retention-days }}

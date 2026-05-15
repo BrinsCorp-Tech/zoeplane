@@ -2,27 +2,54 @@
 
 ## Build Pipeline Overview
 
-ZoePlane uses four GitHub Actions workflows:
+ZoePlane uses five GitHub Actions workflows (Sprint 2 introduced the reusable build-matrix workflow and the Chromatic visual regression workflow):
 
-| Workflow    | File                                | Trigger                              | Purpose                                                                                       |
-| ----------- | ----------------------------------- | ------------------------------------ | --------------------------------------------------------------------------------------------- |
-| CI          | `.github/workflows/ci.yml`          | PR into `main` or `develop`          | Lint + typecheck + test + unsigned build matrix across all 3 platforms                        |
-| Nightly     | `.github/workflows/nightly.yml`     | Daily at 07:00 UTC + manual dispatch | Same matrix as CI, against `main`                                                             |
-| Release     | `.github/workflows/release.yml`     | Push of a `v*.*.*` semver tag        | Signed, distributable artifacts for macOS + Windows + Linux; publishes a GitHub Release draft |
-| Publish SDK | `.github/workflows/publish-sdk.yml` | Same `v*.*.*` tag as Release         | Builds and publishes `@zoeplane/plugin-sdk` to npm                                            |
+| Workflow     | File                                  | Trigger                              | Purpose                                                                                       |
+| ------------ | ------------------------------------- | ------------------------------------ | --------------------------------------------------------------------------------------------- |
+| Build Matrix | `.github/workflows/_build-matrix.yml` | `workflow_call` (reusable)           | Lint + typecheck + test + build across all 3 platforms. Called by CI and Nightly.             |
+| CI           | `.github/workflows/ci.yml`            | PR into `main` or `develop`          | Calls `_build-matrix.yml` + `design-tokens-check`                                             |
+| Nightly      | `.github/workflows/nightly.yml`       | Daily at 07:00 UTC + manual dispatch | Calls `_build-matrix.yml` against `main`                                                      |
+| Release      | `.github/workflows/release.yml`       | Push of a `v*.*.*` semver tag        | Signed, distributable artifacts for macOS + Windows + Linux; publishes a GitHub Release draft |
+| Publish SDK  | `.github/workflows/publish-sdk.yml`   | Same `v*.*.*` tag as Release         | Builds and publishes `@zoeplane/plugin-sdk` to npm                                            |
+| Chromatic    | `.github/workflows/chromatic.yml`     | PR or push to `main`/`develop`       | Visual regression via Storybook + Chromatic (advisory mode; skips when secret absent)         |
+
+### Reusable build matrix (`_build-matrix.yml`)
+
+Sprint 2 (Story 2.2) extracted the duplicated build matrix from `ci.yml` and `nightly.yml` into `.github/workflows/_build-matrix.yml` — a `workflow_call` reusable workflow. This resolves Sprint 1 MED-3. The workflow accepts three inputs:
+
+| Input                     | Type   | Default             | Description                                   |
+| ------------------------- | ------ | ------------------- | --------------------------------------------- |
+| `checkout-ref`            | string | `""` (trigger ref)  | Git ref to check out                          |
+| `artifact-retention-days` | number | `7`                 | Days to retain uploaded Tauri build artifacts |
+| `artifact-name-prefix`    | string | `"tauri-artifacts"` | Prefix for uploaded artifact names            |
 
 ### What runs on PR (ci.yml)
 
-Jobs run in parallel across a 3-platform matrix (`macos-latest`, `windows-latest`, `ubuntu-22.04`) with `fail-fast: false` so a failure on one platform does not cancel the others:
+`ci.yml` calls `_build-matrix.yml` and adds the `design-tokens-check` job. Jobs run with `fail-fast: false` across a 3-platform matrix (`macos-latest`, `windows-latest`, `ubuntu-22.04`):
 
 1. **lint** — `bun run lint` (ESLint flat config, `eslint.config.js`)
 2. **typecheck** — `bun run typecheck` (`tsc --noEmit` across all workspaces)
-3. **test** — `bun run test` (Vitest unit tests)
-4. **scaffold-health** — Ubuntu-only; verifies Tauri icons present, sidecar entry exists, migrations directory non-empty
-5. **actionlint** — Validates GitHub Actions workflow YAML via `reviewdog/action-actionlint`
-6. **build** — Unsigned Tauri platform builds (depends on lint + typecheck + test + scaffold-health passing). Bundles produced: `app` (macOS), `msi,nsis` (Windows), `deb,rpm` (Linux). `dmg` and `AppImage` are excluded from the PR matrix (flaky on GHA runners); they are produced by `release.yml`.
+3. **test** — `bun run test` (Vitest unit tests; includes component a11y tests, contrast harness, guard tests)
+4. **design-tokens-check** — Rebuilds `src/styles/tokens.css` via `bun run tokens:build` and asserts non-empty output. Validates that `packages/design-tokens/src/tokens.seed.json` is parseable and the Style Dictionary pipeline is healthy.
+5. **scaffold-health** — Ubuntu-only; verifies Tauri icons present, sidecar entry exists, migrations directory non-empty.
+6. **actionlint** — Validates GitHub Actions workflow YAML via `reviewdog/action-actionlint`.
+7. **build** — Unsigned Tauri platform builds (depends on lint + typecheck + test + scaffold-health passing). Bundles: `app` (macOS), `msi,nsis` (Windows), `deb,rpm` (Linux). `dmg` and `AppImage` excluded from PR matrix (flaky on GHA runners); produced by `release.yml`.
 
 A `summary` job writes a results table to the GHA step summary regardless of outcome.
+
+### Chromatic visual regression (`chromatic.yml`)
+
+Sprint 2 (Story 2.4) added `.github/workflows/chromatic.yml`. It runs on PR and push to `main`/`develop`.
+
+**Current mode: advisory** (`exitZeroOnChanges: true`). The workflow is fully gated on the `CHROMATIC_PROJECT_TOKEN` GHA secret: all steps carry an `if: env.CHROMATIC_TOKEN != ''` guard and skip cleanly when the secret is absent.
+
+When the secret is provisioned, the workflow:
+
+1. Runs `bun run tokens:build` — `tokens.css` is gitignored and must be generated before the Storybook build.
+2. Runs Chromatic via `chromaui/action@v11` with `onlyChanged: true` (TurboSnap — captures only stories touched by the diff).
+3. Exits zero even if visual diffs are detected (advisory mode — does not block merge).
+
+To graduate to required-check mode (block merge on visual diffs), follow the runbook at `docs/runbooks/chromatic-baseline-lock.md`.
 
 ### What gates merge
 
@@ -46,8 +73,10 @@ Every build follows this sequence:
 # 1. Frontend dependencies
 bun install --frozen-lockfile
 
-# 2. (Release only) Build design tokens
+# 2. Build design tokens (required before UI build — tokens.css is gitignored)
 bun run tokens:build
+# Runs: packages/design-tokens/style-dictionary.config.mjs → src/styles/tokens.css
+# On CI: the design-tokens-check job validates this step independently
 
 # 3. Build React UI (Vite)
 bun run --cwd src build          # outputs to src/dist/
@@ -60,6 +89,8 @@ bun run --cwd sidecar build      # outputs to sidecar/dist/zoeplane-sidecar
 # 5. Tauri build
 cargo tauri build [--bundles <targets>]
 ```
+
+Note: Step 2 (`tokens:build`) is required on every clean checkout because `src/styles/tokens.css` is gitignored. On developer workstations, `bun run dev` also regenerates tokens as part of the Vite startup. On CI, the `design-tokens-check` job runs this step independently as a health gate (step 2a above) before the frontend build consumes the output.
 
 Rust compilation uses Tauri's `opt-level = "z"` / `lto = true` / `strip = true` release profile for production bundles (`src-tauri/Cargo.toml:[profile.release]`).
 
@@ -208,10 +239,10 @@ Homebrew and winget distribution require manual operator action per release. Aut
 
 ## Known Deferred Items
 
-- **MED-3 (code-audit Sprint 1)**: Extract a reusable `.github/workflows/_build-matrix.yml` to eliminate the duplicated build matrix between `ci.yml` and `nightly.yml`. Deferred to Sprint 2.
-- **SHA-256 checksum file**: Not generated by `release.yml`; candidate Sprint 2 improvement.
+- **SHA-256 checksum file**: Not generated by `release.yml`; candidate Sprint 3 improvement.
 - **Branch protection required-checks registration**: 12 required status checks must be registered in GitHub repository settings for `main` and `develop`. Manual repo-settings action, not a workflow change.
+- **Chromatic baseline lock**: Chromatic visual regression is in advisory mode. Requires operator to provision `CHROMATIC_PROJECT_TOKEN` GHA secret and follow `docs/runbooks/chromatic-baseline-lock.md` to accept the Sprint 2 baseline and set `exitZeroOnChanges: false`.
 
 ---
 
-_Last reviewed: 2026-05-10 by project-manager agent — Story 1.11 (Tauri CLI developer prerequisite documented)._
+_Last reviewed: 2026-05-15 by tech-writer agent against Sprint 2 (Stories 2.2, 2.3, 2.4; reusable build-matrix workflow, design-tokens-check CI job, Chromatic advisory workflow)._

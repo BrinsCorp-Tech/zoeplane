@@ -8,28 +8,29 @@
  * Types private to one process live in that process's own source tree.
  */
 
+// Theme contract (ThemeProvider ↔ Plugin SDK)
+import type { ThemePreference } from "./theme";
+export type { ThemePreference, ResolvedTheme, ThemeChangeMessage } from "./theme";
+
+// Icon allowlist
+export type { IconName } from "./icons";
+
 // ============================================================
 // Resource taxonomy (PRD §1.9)
 // ============================================================
 
 /** The six first-class resource kinds tracked by ZoePlane. */
-export type ResourceKind =
-  | "skill"
-  | "agent"
-  | "command"
-  | "team"
-  | "workflow"
-  | "hook";
+export type ResourceKind = "skill" | "agent" | "command" | "team" | "workflow" | "hook";
 
 /** Scope of a resource — where it lives on disk. */
 export type ResourceScope = "global" | "project" | "local";
 
 /** Base fields shared by all resource kinds. */
 export interface BaseResource {
-  id: string;            // Stable hash of (kind + diskPath)
+  id: string; // Stable hash of (kind + diskPath)
   kind: ResourceKind;
   name: string;
-  diskPath: string;      // Absolute path to the source file
+  diskPath: string; // Absolute path to the source file
   scope: ResourceScope;
   lastModifiedAt: string; // ISO 8601
   validityStatus: "valid" | "warnings" | "invalid";
@@ -65,13 +66,13 @@ export type EvaluatorStatus =
  * with the appropriate framing (e.g., Content-Length headers for JSON-RPC over stdio).
  */
 export interface IpcMessage<T = unknown> {
-  id: string;      // Request correlation ID (UUID)
-  method: string;  // e.g., "indexer.watch_path", "task.spawn"
+  id: string; // Request correlation ID (UUID)
+  method: string; // e.g., "indexer.watch_path", "task.spawn"
   params?: T;
 }
 
 export interface IpcResponse<T = unknown> {
-  id: string;      // Matches the request ID
+  id: string; // Matches the request ID
   result?: T;
   error?: IpcError;
 }
@@ -95,7 +96,7 @@ export interface IpcError {
 export interface RunEvent {
   taskId: string;
   agentId: string;
-  sequence: number;  // monotonically increasing per task
+  sequence: number; // monotonically increasing per task
   timestamp: string; // ISO 8601
   type: RunEventType;
   payload: unknown;
@@ -113,6 +114,12 @@ export type RunEventType =
   | "task.errored";
 
 // ============================================================
+// Project context (architect contract 2026-05-14)
+// ============================================================
+
+export type { ProjectContext, ProjectOpenEvent, ProjectCloseEvent } from "./project";
+
+// ============================================================
 // User preferences
 // ============================================================
 
@@ -123,7 +130,7 @@ export type RunEventType =
  * TODO (Epic 10): expand with per-feature preferences.
  */
 export interface UserPreferences {
-  theme: "system" | "light" | "dark";
+  theme: ThemePreference;
   sidebarCollapsed: boolean;
   inspectorOpen: boolean;
   commandPaletteHistory: string[]; // recent commands, max 20

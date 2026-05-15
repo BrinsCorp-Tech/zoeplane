@@ -16,10 +16,7 @@ import type { Config } from "tailwindcss";
 const config: Config = {
   // Tailwind v4 uses CSS-first config; this JS file handles the few cases where
   // programmatic config is needed (darkMode, content paths, plugin registration).
-  content: [
-    "./src/**/*.{ts,tsx}",
-    "./packages/*/src/**/*.{ts,tsx}",
-  ],
+  content: ["./src/**/*.{ts,tsx}", "./packages/*/src/**/*.{ts,tsx}"],
 
   // Dark mode: class strategy with the [data-theme="dark"] attribute selector.
   // This matches how the host sets the theme attribute on <html>.
@@ -35,80 +32,117 @@ const config: Config = {
       // This section handles the shadcn/ui convention mapping so shadcn components
       // (which use --background, --foreground, etc.) resolve to ZoePlane tokens.
       colors: {
-        background:  "var(--color-background)",
-        foreground:  "var(--color-foreground)",
-        surface:     "var(--color-surface)",
-        border:      "var(--color-border)",
+        background: "var(--color-background)",
+        foreground: {
+          DEFAULT: "var(--color-foreground)",
+          muted: "var(--color-foreground-muted)",
+          subtle: "var(--color-foreground-subtle)",
+          disabled: "var(--color-foreground-disabled)",
+        },
+        surface: {
+          DEFAULT: "var(--color-surface)",
+          overlay: "var(--color-surface-overlay)",
+          muted: "var(--color-surface-muted)",
+          raised: "var(--color-surface-raised)",
+          sunken: "var(--color-surface-sunken)",
+        },
+        border: "var(--color-border)",
         accent: {
-          DEFAULT:    "var(--color-accent)",
+          DEFAULT: "var(--color-accent)",
           foreground: "var(--color-accent-foreground)",
-          hover:      "var(--color-accent-hover)",
-          muted:      "var(--color-accent-muted)",
+          hover: "var(--color-accent-hover)",
+          active: "var(--color-accent-active)",
+          muted: "var(--color-accent-muted)",
         },
         success: {
-          DEFAULT:    "var(--color-success)",
-          muted:      "var(--color-success-muted)",
+          DEFAULT: "var(--color-success)",
+          muted: "var(--color-success-muted)",
           foreground: "var(--color-success-foreground)",
         },
         warning: {
-          DEFAULT:    "var(--color-warning)",
-          muted:      "var(--color-warning-muted)",
+          DEFAULT: "var(--color-warning)",
+          muted: "var(--color-warning-muted)",
           foreground: "var(--color-warning-foreground)",
         },
         danger: {
-          DEFAULT:    "var(--color-danger)",
-          muted:      "var(--color-danger-muted)",
+          DEFAULT: "var(--color-danger)",
+          muted: "var(--color-danger-muted)",
           foreground: "var(--color-danger-foreground)",
         },
         info: {
-          DEFAULT:    "var(--color-info)",
-          muted:      "var(--color-info-muted)",
+          DEFAULT: "var(--color-info)",
+          muted: "var(--color-info-muted)",
           foreground: "var(--color-info-foreground)",
         },
         quarantine: {
-          DEFAULT:    "var(--color-quarantine)",
-          muted:      "var(--color-quarantine-muted)",
+          DEFAULT: "var(--color-quarantine)",
+          muted: "var(--color-quarantine-muted)",
           foreground: "var(--color-quarantine-foreground)",
         },
         // shadcn/ui convention aliases
-        primary:     "var(--color-accent)",
-        card:        "var(--color-surface)",
-        input:       "var(--color-surface)",
-        ring:        "var(--color-focus-ring)",
-        muted:       "var(--color-surface-muted)",
+        primary: {
+          DEFAULT: "var(--color-accent)",
+          foreground: "var(--color-accent-foreground)",
+        },
+        card: {
+          DEFAULT: "var(--color-surface)",
+          foreground: "var(--color-foreground)",
+          border: "var(--color-border)",
+        },
+        input: "var(--color-surface)",
+        ring: "var(--color-focus-ring)",
+        muted: {
+          DEFAULT: "var(--color-surface-muted)",
+          foreground: "var(--color-foreground-muted)",
+        },
+        // Additional shadcn/ui aliases (missing from initial scaffold)
+        popover: {
+          DEFAULT: "var(--color-surface-overlay)",
+          foreground: "var(--color-foreground)",
+        },
+        destructive: {
+          DEFAULT: "var(--color-danger)",
+          foreground: "var(--color-danger-foreground)",
+        },
+        secondary: {
+          DEFAULT: "var(--color-surface-muted)",
+          foreground: "var(--color-foreground)",
+        },
+        "border-strong": "var(--color-border-strong)",
+        "hover-overlay": "var(--color-hover-overlay)",
       },
       borderRadius: {
-        sm:   "var(--radius-sm)",
+        sm: "var(--radius-sm)",
         DEFAULT: "var(--radius)",
-        md:   "var(--radius-md)",
-        lg:   "var(--radius-lg)",
-        xl:   "var(--radius-xl)",
+        md: "var(--radius-md)",
+        lg: "var(--radius-lg)",
+        xl: "var(--radius-xl)",
         full: "var(--radius-full)",
       },
       fontFamily: {
-        sans:    ["var(--font-sans)"],
-        mono:    ["var(--font-mono)"],
+        sans: ["var(--font-sans)"],
+        mono: ["var(--font-mono)"],
         display: ["var(--font-display)"],
       },
       spacing: {
         // Expose ZoePlane spacing tokens as Tailwind utilities
         // (supplements Tailwind's default scale for token-aligned overrides)
-        "0_5":  "var(--space-0_5)",
-        "1_5":  "var(--space-1_5)",
-        "2_5":  "var(--space-2_5)",
+        "0_5": "var(--space-0_5)",
+        "1_5": "var(--space-1_5)",
+        "2_5": "var(--space-2_5)",
       },
       boxShadow: {
-        sm:  "var(--shadow-sm)",
+        sm: "var(--shadow-sm)",
         DEFAULT: "var(--shadow)",
-        md:  "var(--shadow-md)",
-        lg:  "var(--shadow-lg)",
+        md: "var(--shadow-md)",
+        lg: "var(--shadow-lg)",
       },
     },
   },
 
   plugins: [
-    // shadcn/ui requires tailwindcss-animate for its animation utilities
-    // TODO (Sprint 1): add require("tailwindcss-animate") once installed
+    // shadcn/ui animation utilities — required for Radix UI enter/exit transitions
+    require("tailwindcss-animate"),
   ],
 };
 

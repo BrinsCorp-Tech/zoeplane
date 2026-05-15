@@ -6,8 +6,8 @@
   "type": "module",
   "main": "src/index.ts",
   "scripts": {
-    "build": "echo 'TODO: design-tokens build pending — Style Dictionary config not yet wired (Sprint N follow-up when first token consumer story lands)'",
-    "check-tokens": "echo 'TODO: token-completeness check not yet implemented — Sprint 1 follow-up'",
+    "build": "node style-dictionary.config.mjs",
+    "check-tokens": "node style-dictionary.config.mjs && test -s ../../src/styles/tokens.css && echo 'tokens:check PASS — pipeline clean, tokens.css is non-empty'",
     "typecheck": "tsc --noEmit"
   },
   "devDependencies": {

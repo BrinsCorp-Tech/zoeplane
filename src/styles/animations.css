@@ -1,0 +1,1193 @@
+/**
+ * ZoePlane Animation Catalog — Story 2.12
+ *
+ * Single source of truth for the A-01 through A-41 animation library
+ * (ux-spec §5.1). Each animation has a default class consuming motion
+ * tokens (`var(--motion-duration-*)`, `var(--motion-easing-*)`) and,
+ * where the animation is layout-changing, an explicit reduced-motion
+ * override.
+ *
+ * Catalog ID → class name convention: `.animate-A-NN-kebab-name`
+ *
+ * Components consume animations BY ID — never hand-author new animation
+ * patterns. If a component needs a motion not in the catalog, add it
+ * here in the same PR (AC #6).
+ *
+ * Reduced-motion strategy:
+ *  - globals.css lines 127-148 zeros animation-duration + transition-duration
+ *    globally via @media (prefers-reduced-motion: reduce) AND a
+ *    .prefers-reduced-motion class fallback for Storybook decorator.
+ *  - For layout-changing animations (e.g., infinite loops like A-12 pulse),
+ *    add explicit overrides below in the @media block in this file. The
+ *    global zero-duration block handles transition-only animations automatically.
+ *
+ * Instant-by-design entries (A-11, A-24) declare a NO-OP class — they
+ * have no transition; the class exists for catalog completeness and
+ * consumer reference. Reduced-motion is identical to default.
+ */
+
+/* ───── Batch A: Foundation + interactive states ────────────────────── */
+
+/* A-10 Hover state on buttons / cards
+ * Type: transition (color, background-color, border-color)
+ * Duration: fast (120ms), easing: decelerate
+ * Reduced: instant (handled by globals.css nuclear block)
+ */
+.animate-A-10-hover-state {
+  transition:
+    color var(--motion-duration-fast) var(--motion-easing-decelerate),
+    background-color var(--motion-duration-fast) var(--motion-easing-decelerate),
+    border-color var(--motion-duration-fast) var(--motion-easing-decelerate);
+}
+
+/* A-11 Focus ring appearance — INSTANT BY DESIGN
+ * Per ux-spec §5.1 row 11: "focus ring should never animate — accessibility"
+ * No transition. Class exists for catalog ID consistency.
+ */
+.animate-A-11-focus-ring {
+  /* intentionally empty — focus ring is instant by design (accessibility requirement) */
+}
+
+/* A-12 Approval card border-tint pulse
+ * Type: keyframe animation (infinite loop on border-color)
+ * Duration: 1.5s (slow × ~3.75), easing: standard
+ * Reduced: animation: none — must be explicit because globals.css zeros
+ *   animation-duration to 0.01ms (not 0), which would keep an infinite
+ *   loop running at near-zero duration. Explicit `animation: none` is safer.
+ */
+@keyframes animate-A-12-approval-pulse {
+  0%,
+  100% {
+    border-color: var(--color-pane-approval);
+  }
+  50% {
+    border-color: var(--color-warning);
+  }
+}
+.animate-A-12-approval-pulse {
+  animation: animate-A-12-approval-pulse 1.5s var(--motion-easing-standard) infinite;
+}
+
+/* A-13 Per-agent pane state transitions
+ * Type: transition (background-color, border-color)
+ * Duration: base (200ms), easing: standard
+ * Reduced: instant (handled by globals.css nuclear block)
+ */
+.animate-A-13-pane-state-transition {
+  transition:
+    background-color var(--motion-duration-base) var(--motion-easing-standard),
+    border-color var(--motion-duration-base) var(--motion-easing-standard);
+}
+
+/* A-14 Pane completion transition (Streaming -> Completed)
+ * Type: transition (background-color)
+ * Duration: base (200ms), easing: standard
+ * Note: ux-spec §5.1 specifies 250ms; base (200ms) is the nearest token tier — operator-approved rounding (no 250ms tier exists to preserve fast/base/slow vocabulary discipline).
+ * Note: badge crossfade is composed separately by the consumer as needed.
+ * Reduced: instant (handled by globals.css nuclear block)
+ */
+.animate-A-14-pane-completion {
+  transition: background-color var(--motion-duration-base) var(--motion-easing-standard);
+}
+
+/* A-15 Pane error transition
+ * Type: transition (border-color)
+ * Duration: base (200ms), easing: standard
+ * Note: ux-spec §5.1 specifies 250ms; base (200ms) is the nearest token tier — operator-approved rounding (no 250ms tier exists to preserve fast/base/slow vocabulary discipline).
+ * Note: badge crossfade is composed separately by the consumer as needed.
+ * Reduced: instant (handled by globals.css nuclear block)
+ */
+.animate-A-15-pane-error {
+  transition: border-color var(--motion-duration-base) var(--motion-easing-standard);
+}
+
+/* A-24 Theme switch — INSTANT BY DESIGN
+ * Per dark-mode-architecture.md: theme switch is always instant; no fade.
+ * Class exists for catalog ID consistency.
+ */
+.animate-A-24-theme-switch {
+  /* intentionally empty — theme switch is instant by design */
+}
+
+/* ───── Batch B: Modal / overlay family ──────────────────────────────── */
+
+/* A-07 Modal open
+ * Type: keyframe animation (fade-in + scale 0.96 → 1.0)
+ * Duration: base (200ms), easing: standard
+ * Reduced: fade-in only — swap keyframe to strip scale transform
+ */
+@keyframes animate-A-07-modal-open {
+  from {
+    opacity: 0;
+    transform: scale(0.96);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+@keyframes animate-A-07-modal-open-reduced {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+.animate-A-07-modal-open {
+  animation: animate-A-07-modal-open var(--motion-duration-base) var(--motion-easing-standard) both;
+}
+
+/* A-08 Modal close
+ * Type: keyframe animation (fade-out + scale 1.0 → 0.96)
+ * Duration: fast (120ms), easing: standard
+ * Note: ux-spec §5.1 specifies 150ms; fast (120ms) is the nearest token tier — operator-approved rounding to preserve fast/base/slow vocabulary.
+ * Reduced: fade-out only — swap keyframe to strip scale transform
+ */
+@keyframes animate-A-08-modal-close {
+  from {
+    opacity: 1;
+    transform: scale(1);
+  }
+  to {
+    opacity: 0;
+    transform: scale(0.96);
+  }
+}
+@keyframes animate-A-08-modal-close-reduced {
+  from {
+    opacity: 1;
+  }
+  to {
+    opacity: 0;
+  }
+}
+.animate-A-08-modal-close {
+  animation: animate-A-08-modal-close var(--motion-duration-fast) var(--motion-easing-standard) both;
+}
+
+/* A-09 Command palette open
+ * Type: keyframe animation (fade-in + slide-down 4 px)
+ * Duration: fast (120ms), easing: standard
+ * Note: ux-spec §5.1 specifies 150ms; fast (120ms) is the nearest token tier — operator-approved rounding to preserve fast/base/slow vocabulary.
+ * Reduced: fade-in only — swap keyframe to strip translateY transform
+ */
+@keyframes animate-A-09-command-palette-open {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+@keyframes animate-A-09-command-palette-open-reduced {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+.animate-A-09-command-palette-open {
+  animation: animate-A-09-command-palette-open var(--motion-duration-fast)
+    var(--motion-easing-standard) both;
+}
+
+/* A-33 Confirmation modal destructive button hover
+ * Type: transition (background-color)
+ * Duration: fast (120ms), easing: standard
+ * Note: ux-spec §5.1 specifies 100ms; fast (120ms) is the nearest token tier — operator-approved rounding to preserve fast/base/slow vocabulary.
+ * Reduced: instant tone change (handled by globals.css nuclear block)
+ */
+.animate-A-33-destructive-hover {
+  transition: background-color var(--motion-duration-fast) var(--motion-easing-standard);
+}
+
+/* A-39 StrictModeToggle confirmation dialog open
+ * Shares motion with A-07 (200ms fade-in + scale 0.96 → 1.0) but is a
+ * distinct class for consumer-ID semantics. Softer framing — no red
+ * destructive accent in the animation itself.
+ * Type: keyframe animation
+ * Duration: base (200ms), easing: standard
+ * Reduced: fade-in only — swap keyframe (reuses A-07 reduced keyframe)
+ * Implementation: strategy (a) — reuses A-07 keyframe, distinct class.
+ */
+.animate-A-39-strict-mode-confirm {
+  animation: animate-A-07-modal-open var(--motion-duration-base) var(--motion-easing-standard) both;
+}
+
+/* A-41 Dropdown menu open/close
+ * Type: keyframe animation (fade-in + scale 0.97 → 1.0)
+ * Duration: fast (120ms), easing: standard
+ * Note: ux-spec §5.1 specifies 150ms; fast (120ms) is the nearest token tier — operator-approved rounding to preserve fast/base/slow vocabulary.
+ * Reduced: fade-in only — swap keyframe to strip scale transform
+ */
+@keyframes animate-A-41-dropdown-open {
+  from {
+    opacity: 0;
+    transform: scale(0.97);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+@keyframes animate-A-41-dropdown-open-reduced {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+.animate-A-41-dropdown-open {
+  animation: animate-A-41-dropdown-open var(--motion-duration-fast) var(--motion-easing-standard)
+    both;
+}
+
+/* ───── Batch C: Pane / region / banner transitions ──────────────────── */
+
+/* Batch C easing pattern:
+ *   - Entrance animations (slides, fades coming IN): `decelerate`
+ *     (curve decelerates into resting position — feels arrival-like)
+ *   - Exit/dismiss animations (slides, fades going OUT): `standard`
+ *     (curve accelerates out — feels departure-like)
+ *   - Hover, transition-only, neutral state changes: `standard` (default)
+ *
+ * This pattern is intentional per ux-spec motion design principles.
+ * Batch D should follow the same easing discipline.
+ */
+
+/* A-03 Toast notification entrance
+ * Type: keyframe animation (fade-in + slide-up 8px)
+ * Duration: base (200ms), easing: decelerate (decelerates into resting position)
+ * Note: ux-spec §5.1 specifies 250ms; base (200ms) is the nearest token tier —
+ *   operator-approved rounding to preserve fast/base/slow vocabulary discipline.
+ * Reduced: fade-in only — swap keyframe to strip translateY transform
+ */
+@keyframes animate-A-03-toast-entrance {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+@keyframes animate-A-03-toast-entrance-reduced {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+.animate-A-03-toast-entrance {
+  animation: animate-A-03-toast-entrance var(--motion-duration-base) var(--motion-easing-decelerate)
+    both;
+}
+
+/* A-04 Toast notification exit
+ * Type: keyframe animation (fade-out + slide-up 8px)
+ * Duration: base (200ms), easing: standard (accelerates out)
+ * Note: ux-spec §5.1 specifies 200ms; base (200ms) is an exact match — no rounding needed
+ * Reduced: fade-out only — swap keyframe to strip translateY transform
+ */
+@keyframes animate-A-04-toast-exit {
+  from {
+    opacity: 1;
+    transform: translateY(0);
+  }
+  to {
+    opacity: 0;
+    transform: translateY(-8px);
+  }
+}
+@keyframes animate-A-04-toast-exit-reduced {
+  from {
+    opacity: 1;
+  }
+  to {
+    opacity: 0;
+  }
+}
+.animate-A-04-toast-exit {
+  animation: animate-A-04-toast-exit var(--motion-duration-base) var(--motion-easing-standard) both;
+}
+
+/* A-23 Notification bell badge count change
+ * Type: keyframe animation (scale pop 1.0 → 1.15 → 1.0)
+ * Duration: fast (120ms), easing: standard
+ * Note: ux-spec §5.1 specifies 100ms; fast (120ms) is the nearest token tier —
+ *   operator-approved rounding to preserve fast/base/slow vocabulary discipline.
+ * Reduced: animation: none — count changes instantly (per spec). Must be explicit
+ *   because globals.css zeros duration (not removes the animation); a near-zero
+ *   scale pop would still cause a flash.
+ */
+@keyframes animate-A-23-bell-pop {
+  0%,
+  100% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.15);
+  }
+}
+.animate-A-23-bell-pop {
+  animation: animate-A-23-bell-pop var(--motion-duration-fast) var(--motion-easing-standard) both;
+}
+
+/* A-05 Pane open / close (sidebar, inspector)
+ * INTENTIONALLY SPLIT INTO TWO CLASSES because the easing differs:
+ *   .animate-A-05-pane-open  — decelerate (curve decelerates into final position)
+ *   .animate-A-05-pane-close — standard   (curve accelerates out of view)
+ * ux-spec §5.1 row 5 describes A-05 as one entry; consumers pick the directional
+ * variant per use site. Both share the 200ms duration (base) and both reduce
+ * to `animation: none` per spec "Instant (no transition)".
+ * Type: keyframe animation (slide + fade)
+ * Duration: base (200ms), easing: decelerate (open) / standard (close)
+ * Reduced: animation: none — instant (per ux-spec §5.1)
+ */
+.animate-A-05-pane-open {
+  animation: animate-A-05-pane-open var(--motion-duration-base) var(--motion-easing-decelerate) both;
+}
+.animate-A-05-pane-close {
+  animation: animate-A-05-pane-close var(--motion-duration-base) var(--motion-easing-standard) both;
+}
+@keyframes animate-A-05-pane-open {
+  from {
+    opacity: 0;
+    transform: translateX(-12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+@keyframes animate-A-05-pane-close {
+  from {
+    opacity: 1;
+    transform: translateX(0);
+  }
+  to {
+    opacity: 0;
+    transform: translateX(-12px);
+  }
+}
+
+/* A-06 Tab open/close in primary work area
+ * Type: transition (opacity fade-in on content; width on tab strip)
+ * Duration: fast (120ms), easing: standard
+ * Note: ux-spec §5.1 specifies 150ms; fast (120ms) is the nearest token tier —
+ *   operator-approved rounding to preserve fast/base/slow vocabulary discipline.
+ * Reduced: instant (handled by globals.css nuclear block — transition-only)
+ */
+.animate-A-06-tab-content-open {
+  /* reduced: instant via globals.css nuclear block */
+  animation: animate-A-06-tab-content-open var(--motion-duration-fast) var(--motion-easing-standard)
+    both;
+}
+@keyframes animate-A-06-tab-content-open {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+.animate-A-06-tab-strip-width {
+  /* Tab strip width transition on open/close
+   * reduced: instant via globals.css nuclear block */
+  transition: width var(--motion-duration-fast) var(--motion-easing-standard);
+}
+
+/* A-19 Tab strip drag reorder
+ * Type: transition (transform — tabs animate to new positions)
+ * Duration: fast (120ms), easing: standard
+ * Note: ux-spec §5.1 specifies 150ms; fast (120ms) is the nearest token tier —
+ *   operator-approved rounding to preserve fast/base/slow vocabulary discipline.
+ * Reduced: instant (handled by globals.css nuclear block — transition-only)
+ */
+.animate-A-19-tab-reorder {
+  /* reduced: instant via globals.css nuclear block */
+  transition: transform var(--motion-duration-fast) var(--motion-easing-standard);
+}
+
+/* A-21 Active Tasks banner appearance (relaunch)
+ * Type: keyframe animation (slide-down from top)
+ * Duration: base (200ms), easing: decelerate (decelerates into resting position)
+ * Reduced: animation: none — instant appearance (per ux-spec §5.1 "Instant")
+ */
+@keyframes animate-A-21-banner-appear {
+  from {
+    transform: translateY(-100%);
+  }
+  to {
+    transform: translateY(0);
+  }
+}
+.animate-A-21-banner-appear {
+  animation: animate-A-21-banner-appear var(--motion-duration-base) var(--motion-easing-decelerate)
+    both;
+}
+
+/* A-22 Active Tasks banner dismissal
+ * Type: keyframe animation (slide-up out of view)
+ * Duration: fast (120ms), easing: standard (accelerates out)
+ * Note: ux-spec §5.1 specifies 150ms; fast (120ms) is the nearest token tier —
+ *   operator-approved rounding to preserve fast/base/slow vocabulary discipline.
+ * Reduced: animation: none — instant dismissal (per ux-spec §5.1 "Instant")
+ */
+@keyframes animate-A-22-banner-dismiss {
+  from {
+    transform: translateY(0);
+  }
+  to {
+    transform: translateY(-100%);
+  }
+}
+.animate-A-22-banner-dismiss {
+  animation: animate-A-22-banner-dismiss var(--motion-duration-fast) var(--motion-easing-standard)
+    both;
+}
+
+/* A-27 Approval card slide-in
+ * Type: keyframe animation (slide-up 12px + fade-in)
+ * Duration: base (200ms), easing: decelerate (decelerates into final position)
+ * Reduced: animation: none — instant appearance (per ux-spec §5.1 "Instant")
+ */
+@keyframes animate-A-27-approval-card-in {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+.animate-A-27-approval-card-in {
+  animation: animate-A-27-approval-card-in var(--motion-duration-base)
+    var(--motion-easing-decelerate) both;
+}
+
+/* A-28 Diff Viewer pane reveal
+ * Type: keyframe animation (slide-from-right 12px)
+ * Duration: base (200ms), easing: decelerate (decelerates into final position)
+ * Reduced: animation: none — instant reveal (per ux-spec §5.1 "Instant")
+ */
+@keyframes animate-A-28-diff-viewer-reveal {
+  from {
+    opacity: 0;
+    transform: translateX(12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+.animate-A-28-diff-viewer-reveal {
+  animation: animate-A-28-diff-viewer-reveal var(--motion-duration-base)
+    var(--motion-easing-decelerate) both;
+}
+
+/* A-30 Page-level route transition
+ * Type: keyframe animation pair (fade-out current + fade-in new page)
+ * Duration: fast (120ms) exit, fast (120ms) enter — ux-spec §5.1 specifies
+ *   100ms fade-out + 150ms fade-in; both round to fast (120ms).
+ * Easing: standard
+ * Reduced: instant (handled by globals.css nuclear block — keyframe zeroed to near-instant)
+ *   Additional explicit override not needed as the fade-only animation has no layout transform.
+ */
+@keyframes animate-A-30-route-fade-out {
+  from {
+    opacity: 1;
+  }
+  to {
+    opacity: 0;
+  }
+}
+@keyframes animate-A-30-route-fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+.animate-A-30-route-fade-out {
+  /* reduced: instant via globals.css nuclear block */
+  animation: animate-A-30-route-fade-out var(--motion-duration-fast) var(--motion-easing-standard)
+    both;
+}
+.animate-A-30-route-fade-in {
+  /* reduced: instant via globals.css nuclear block */
+  animation: animate-A-30-route-fade-in var(--motion-duration-fast) var(--motion-easing-standard)
+    both;
+}
+
+/* A-32 Inline error banner appearance
+ * Type: keyframe animation (slide-down + fade-in)
+ * Duration: base (200ms), easing: decelerate (decelerates into resting position)
+ * Reduced: fade-in only — swap keyframe to strip translateY transform
+ *   (per ux-spec §5.1 reduced = "100ms fade-in only")
+ */
+@keyframes animate-A-32-error-banner-appear {
+  from {
+    opacity: 0;
+    transform: translateY(-8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+@keyframes animate-A-32-error-banner-appear-reduced {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+.animate-A-32-error-banner-appear {
+  animation: animate-A-32-error-banner-appear var(--motion-duration-base)
+    var(--motion-easing-decelerate) both;
+}
+
+/* A-34 Drag-and-drop hover-target highlight
+ * Type: transition (background-color / tint fade-in)
+ * Duration: fast (120ms), easing: standard
+ * Note: ux-spec §5.1 specifies 100ms; fast (120ms) is the nearest token tier —
+ *   operator-approved rounding to preserve fast/base/slow vocabulary discipline.
+ * Reduced: instant (handled by globals.css nuclear block — transition-only)
+ */
+.animate-A-34-dnd-hover-highlight {
+  /* reduced: instant via globals.css nuclear block */
+  transition: background-color var(--motion-duration-fast) var(--motion-easing-standard);
+}
+
+/* A-35 File-modified-externally banner
+ * Type: keyframe animation (slide-down from top of editor pane)
+ * Duration: base (200ms), easing: decelerate (decelerates into resting position)
+ * Reduced: animation: none — instant appearance (per ux-spec §5.1 "Instant")
+ */
+@keyframes animate-A-35-file-modified-banner {
+  from {
+    transform: translateY(-100%);
+  }
+  to {
+    transform: translateY(0);
+  }
+}
+.animate-A-35-file-modified-banner {
+  animation: animate-A-35-file-modified-banner var(--motion-duration-base)
+    var(--motion-easing-decelerate) both;
+}
+
+/* ───── Batch D: Skeleton / streaming / editor / workflow / hook animations ─── */
+
+/* Batch D easing pattern follows Batch C:
+ *   - Entrance (fade-in, slide-in): `decelerate`
+ *   - Exit / dismiss: `standard`
+ *   - Infinite / pulse / shimmer loops: `standard`
+ *   - Snap-to-grid / release snaps: `decelerate` (arrival feel)
+ */
+
+/* A-01 Skeleton shimmer
+ * Context: LibraryShell cards, route shells — loading placeholder gradient sweep
+ * Type: keyframe animation (infinite shimmer gradient)
+ * Duration: 1.2s literal (no matching fast/base/slow tier — same precedent as A-12's 1.5s)
+ * Easing: standard (infinite loop)
+ * Reduced: animation: none — static muted fill; no animation
+ */
+@keyframes animate-A-01-skeleton-shimmer {
+  0% {
+    background-position: -200% 0;
+  }
+  100% {
+    background-position: 200% 0;
+  }
+}
+.animate-A-01-skeleton-shimmer {
+  background: linear-gradient(
+    90deg,
+    var(--color-surface-muted) 25%,
+    var(--color-surface) 50%,
+    var(--color-surface-muted) 75%
+  );
+  background-size: 200% 100%;
+  animation: animate-A-01-skeleton-shimmer 1.2s var(--motion-easing-standard) infinite;
+}
+
+/* A-02 Streaming text cursor blink
+ * Context: agent pane tail — blinking caret while streaming
+ * Type: keyframe animation (infinite opacity pulse)
+ * Duration: 1.2s literal (same precedent as A-01 / A-12 — no matching tier for sub-1s pulse)
+ * Easing: standard (infinite loop)
+ * Reduced: animation: none — static caret (no blink)
+ */
+@keyframes animate-A-02-cursor-blink {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.5;
+  }
+}
+.animate-A-02-cursor-blink {
+  animation: animate-A-02-cursor-blink 1.2s var(--motion-easing-standard) infinite;
+}
+
+/* A-16 Tool-use card slide-in (within agent pane)
+ * Type: keyframe animation (slide-up 8px + fade-in)
+ * Duration: base (200ms — exact match to ux-spec), easing: decelerate (entrance)
+ * Reduced: animation: none — instant appearance
+ */
+@keyframes animate-A-16-tool-card-slide-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+.animate-A-16-tool-card-slide-in {
+  animation: animate-A-16-tool-card-slide-in var(--motion-duration-base)
+    var(--motion-easing-decelerate) both;
+}
+
+/* A-17 Workflow Builder edge drawing during drag
+ * Type: transition (transform — animated edge follows cursor)
+ * Duration: fast (120ms up-round; ux-spec "100ms snap on release")
+ * Note: 100ms rounds up to fast (120ms) — operator-approved rounding to preserve
+ *   fast/base/slow vocabulary discipline.
+ * Easing: decelerate (snap-to-grid arrival feel on release)
+ * Reduced: implicit via globals.css nuclear block — "Static line that snaps" (transition-only)
+ */
+.animate-A-17-edge-snap {
+  /* reduced: instant via globals.css nuclear block */
+  transition: transform var(--motion-duration-fast) var(--motion-easing-decelerate);
+}
+
+/* A-18 Workflow Builder node drag
+ * Type: transition (transform — snap-to-grid with ease-out)
+ * Duration: fast (120ms up-round; ux-spec "80ms ease-out")
+ * Note: 80ms rounds up to fast (120ms) — operator-approved rounding to preserve
+ *   fast/base/slow vocabulary discipline.
+ * Easing: decelerate (snap-to-grid arrival feel)
+ * Reduced: implicit via globals.css nuclear block — "Instant snap (no easing)"
+ */
+.animate-A-18-node-snap {
+  /* reduced: instant via globals.css nuclear block */
+  transition: transform var(--motion-duration-fast) var(--motion-easing-decelerate);
+}
+
+/* A-20 Sidebar item-count badge appearance (cold-launch)
+ * Type: keyframe animation (fade-in as count resolves)
+ * Duration: fast (120ms down-round; ux-spec "150ms fade-in")
+ * Note: 150ms rounds down to fast (120ms) — nearest token tier.
+ * Easing: decelerate (entrance/appearance)
+ * Reduced: implicit via globals.css nuclear block — "Instant" (fade-only, no transform)
+ */
+.animate-A-20-badge-appear {
+  /* reduced: instant via globals.css nuclear block */
+  animation: animate-A-20-badge-appear var(--motion-duration-fast) var(--motion-easing-decelerate)
+    both;
+}
+@keyframes animate-A-20-badge-appear {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+/* A-25 Skeleton card grid stagger entrance
+ * Type: keyframe animation (staggered fade-in per card)
+ * Duration: fast (120ms down-round; ux-spec 30ms stagger, max 200ms total)
+ * Easing: decelerate (entrance)
+ * Stagger pattern: consumers set --card-index CSS custom property (0-based) on each
+ *   card element; animation-delay = calc(var(--card-index, 0) * 30ms).
+ *   Total for 5+ cards caps naturally at the animation fill-both behavior.
+ *   Example: <div class="animate-A-25-card-stagger" style="--card-index: 2">
+ * Reduced: animation: none — all cards appear simultaneously (no stagger delay either)
+ */
+@keyframes animate-A-25-card-stagger {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+.animate-A-25-card-stagger {
+  animation: animate-A-25-card-stagger var(--motion-duration-fast) var(--motion-easing-decelerate)
+    both;
+  animation-delay: calc(var(--card-index, 0) * 30ms);
+}
+
+/* A-26 Evaluator progress phase highlight
+ * Type: transition (bar fill — continuous fill per phase transition)
+ * Duration: base (200ms — exact match to ux-spec), easing: standard (state change)
+ * Reduced: implicit via globals.css nuclear block (transition-only — no layout transform).
+ *   Component consumers: when .prefers-reduced-motion class is active on <html>,
+ *   the transition is zeroed and you SHOULD render a `▸` glyph adjacent to the
+ *   active phase label (e.g., `aria-current="step"` + `▸` prefix) as the ux-spec
+ *   reduced fallback. The CSS contract only zeroes the bar fill transition; the
+ *   glyph is a component-level UX concern, not a separate keyframe here.
+ */
+.animate-A-26-phase-bar-fill {
+  /* reduced: instant via globals.css nuclear block; component renders ▸ glyph fallback */
+  transition: width var(--motion-duration-base) var(--motion-easing-standard);
+}
+
+/* A-29 Onboarding tour panel transitions
+ * Type: keyframe animation (250ms crossfade between tour steps in default mode)
+ * Duration: base (200ms; 50ms rounding — ux-spec 250ms, nearest tier is base)
+ * Note: 250ms rounds to base (200ms) — operator-approved rounding to preserve
+ *   fast/base/slow vocabulary discipline.
+ * Easing: standard
+ * Reduced: sequential fade-out then fade-in — per ux-spec "100ms fade-out then fade-in
+ *   (sequential, not crossfade); no slide". The reduced keyframe mirrors A-03-toast-entrance-
+ *   reduced (opacity only). The consumer drives sequencing (mount/unmount) externally.
+ */
+@keyframes animate-A-29-tour-crossfade {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+/* A-29 reduced: consumer drives fade-out externally (unmount old panel);
+ * this keyframe handles fade-in of the new panel only. Identical to default
+ * keyframe by design — the SEQUENTIAL semantic comes from consumer mount/unmount
+ * orchestration, not from CSS. Duration var(--motion-duration-fast) ≈ spec 100ms.
+ */
+@keyframes animate-A-29-tour-crossfade-reduced {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+.animate-A-29-tour-crossfade {
+  animation: animate-A-29-tour-crossfade var(--motion-duration-base) var(--motion-easing-standard)
+    both;
+}
+
+/* A-31 Plugin slot loading skeleton-to-content transition
+ * Type: keyframe animation (fade-in of plugin iframe content once handshake completes)
+ * Duration: base (200ms — exact match to ux-spec), easing: decelerate (content arrival)
+ * Reduced: animation: none — instant reveal (per ux-spec "Instant")
+ */
+@keyframes animate-A-31-plugin-fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+.animate-A-31-plugin-fade-in {
+  animation: animate-A-31-plugin-fade-in var(--motion-duration-base) var(--motion-easing-decelerate)
+    both;
+}
+
+/* A-36 HookCard state-badge transition
+ * Type: keyframe animation (crossfade between badge states)
+ * Duration: base (200ms — exact match to ux-spec for badge crossfade),
+ *   fast (120ms down-round) for left-edge accent stripe fade (ux-spec "150ms")
+ * Note: 150ms stripe rounds to fast (120ms) — nearest token tier.
+ * Easing: standard
+ * Reduced: animation: none — instant badge swap; instant stripe removal
+ */
+@keyframes animate-A-36-badge-crossfade {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+.animate-A-36-badge-crossfade {
+  animation: animate-A-36-badge-crossfade var(--motion-duration-base) var(--motion-easing-standard)
+    both;
+}
+
+/* A-36 (stripe) HookCard left-edge accent stripe fade (Strict Mode quarantine exit)
+ * Type: transition (opacity)
+ * Duration: fast (120ms down-round; ux-spec "150ms"), easing: standard
+ * Reduced: implicit via globals.css nuclear block (transition-only)
+ * Note: A-40 covers the stripe fade-IN; A-36-stripe is the fade-OUT on quarantine exit.
+ */
+.animate-A-36-stripe-fade {
+  /* reduced: instant via globals.css nuclear block */
+  transition: opacity var(--motion-duration-fast) var(--motion-easing-standard);
+}
+
+/* A-37 HookSoftNotificationBanner appearance (default mode)
+ * Type: keyframe animation (slide-down + fade-in)
+ * Duration: base (200ms — exact match to ux-spec), easing: decelerate (entrance)
+ * Reduced: fade-in only — swap keyframe to strip translateY (per ux-spec "100ms fade-in only")
+ */
+@keyframes animate-A-37-hook-banner-appear {
+  from {
+    opacity: 0;
+    transform: translateY(-100%);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+@keyframes animate-A-37-hook-banner-appear-reduced {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+.animate-A-37-hook-banner-appear {
+  animation: animate-A-37-hook-banner-appear var(--motion-duration-base)
+    var(--motion-easing-decelerate) both;
+}
+
+/* A-38 HookQuarantineBanner appearance (Strict Mode only)
+ * Type: keyframe animation (slide-down + fade-in + 1.5s pulse on shield icon)
+ * Duration: base (200ms) for banner entrance; 1.5s literal for icon pulse
+ * Note: 1.5s does not map to fast/base/slow tiers — same precedent as A-12.
+ * Easing: decelerate (banner entrance), standard (pulse loop)
+ * Reduced: animation: none — static banner; no slide, no pulse
+ */
+@keyframes animate-A-38-quarantine-banner-appear {
+  from {
+    opacity: 0;
+    transform: translateY(-100%);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+@keyframes animate-A-38-shield-pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.5;
+  }
+}
+.animate-A-38-quarantine-banner-appear {
+  animation: animate-A-38-quarantine-banner-appear var(--motion-duration-base)
+    var(--motion-easing-decelerate) both;
+}
+.animate-A-38-shield-pulse {
+  /* Applied to the shield icon element only — 3 iterations (1.5s × 3 = 4.5s total)
+   * per ux-spec "subtle 1.5s pulse on shield icon for first 3 seconds".
+   * Using 3 iterations (not infinite) to respect the 3-second maximum. */
+  animation: animate-A-38-shield-pulse 1.5s var(--motion-easing-standard) 3;
+}
+
+/* A-40 HookCard left-edge accent stripe appearance (Strict Mode quarantine entry)
+ * Type: keyframe animation (stripe fades in on quarantine state entry)
+ * Duration: fast (120ms down-round; ux-spec "150ms"), easing: decelerate (entrance)
+ * Note: 150ms rounds to fast (120ms) — nearest token tier.
+ * Reduced: animation: none — instant stripe appearance
+ */
+@keyframes animate-A-40-stripe-appear {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+.animate-A-40-stripe-appear {
+  animation: animate-A-40-stripe-appear var(--motion-duration-fast) var(--motion-easing-decelerate)
+    both;
+}
+
+/* ───── Reduced-motion overrides ─────────────────────────────────────── */
+/* For layout-changing animations. The globals.css nuclear block already
+ * zeros transition-duration and animation-duration globally. Override
+ * here only for animations where the reduced-motion variant is more
+ * specific than "instant" (i.e., infinite loops that must be stopped
+ * entirely, not merely slowed to near-zero).
+ *
+ * Reduced-motion override strategies (sprint-context AC-5, ux-spec §5):
+ *
+ * Strategy A — named -reduced keyframe (e.g., animate-A-03-toast-entrance-reduced):
+ *   Used when the spec's "Reduced" column says "fade only, no slide/scale" —
+ *   swap animation-name to a paired keyframe that fades without transform.
+ *   Applied to: A-03, A-04, A-32 in this batch.
+ *
+ * Strategy B — explicit `animation: none`:
+ *   Used when (a) the spec's "Reduced" column says "Instant" AND the default
+ *   keyframe has layout-changing transforms (slide), OR (b) the default is an
+ *   infinite loop (must be stopped completely, not just slowed).
+ *   Applied to: A-05 open/close, A-21, A-22, A-23, A-27, A-28, A-35.
+ *
+ * Strategy C — implicit via globals.css nuclear block:
+ *   Used when the animation is transition-only (no @keyframes) or a fade with
+ *   no transform. The global `transition-duration: 0` + `animation-duration:
+ *   0.01ms` rules handle reduction automatically; no per-class override needed.
+ *   Applied to: A-06, A-19, A-30, A-34.
+ *
+ * Pick the strategy based on (1) animation type (keyframe vs transition),
+ * (2) reduced spec requirement (fade-only / instant / no-op), (3) whether the
+ * default has an infinite loop that the global block's 0.01ms duration would
+ * still allow to flash.
+ */
+@media (prefers-reduced-motion: reduce) {
+  .animate-A-12-approval-pulse {
+    animation: none;
+  }
+
+  /* A-07 modal open — fade only, no scale */
+  .animate-A-07-modal-open {
+    animation-name: animate-A-07-modal-open-reduced;
+  }
+
+  /* A-08 modal close — fade only, no scale */
+  .animate-A-08-modal-close {
+    animation-name: animate-A-08-modal-close-reduced;
+  }
+
+  /* A-09 command palette open — fade only, no slide */
+  .animate-A-09-command-palette-open {
+    animation-name: animate-A-09-command-palette-open-reduced;
+  }
+
+  /* A-39 strict-mode confirm — same reduced treatment as A-07 */
+  .animate-A-39-strict-mode-confirm {
+    animation-name: animate-A-07-modal-open-reduced;
+  }
+
+  /* A-41 dropdown open — fade only, no scale */
+  .animate-A-41-dropdown-open {
+    animation-name: animate-A-41-dropdown-open-reduced;
+  }
+
+  /* A-33 destructive hover — transition-only; instant via globals.css nuclear block */
+
+  /* ── Batch C reduced-motion overrides ── */
+
+  /* A-03 toast entrance — fade only, no slide */
+  .animate-A-03-toast-entrance {
+    animation-name: animate-A-03-toast-entrance-reduced;
+  }
+
+  /* A-04 toast exit — fade only, no slide */
+  .animate-A-04-toast-exit {
+    animation-name: animate-A-04-toast-exit-reduced;
+  }
+
+  /* A-23 bell badge pop — instant count change; explicit none required (infinite-loop-style near-zero flash risk) */
+  .animate-A-23-bell-pop {
+    animation: none;
+  }
+
+  /* A-05 pane open/close — instant (globals.css nuclear block handles transitions;
+   * keyframe animations need explicit none to fully suppress) */
+  .animate-A-05-pane-open,
+  .animate-A-05-pane-close {
+    animation: none;
+  }
+
+  /* A-21 banner appear — instant (per spec) */
+  .animate-A-21-banner-appear {
+    animation: none;
+  }
+
+  /* A-22 banner dismiss — instant (per spec) */
+  .animate-A-22-banner-dismiss {
+    animation: none;
+  }
+
+  /* A-27 approval card slide-in — instant (per spec) */
+  .animate-A-27-approval-card-in {
+    animation: none;
+  }
+
+  /* A-28 diff viewer reveal — instant (per spec) */
+  .animate-A-28-diff-viewer-reveal {
+    animation: none;
+  }
+
+  /* A-32 inline error banner — fade only, no slide (per spec "100ms fade-in only") */
+  .animate-A-32-error-banner-appear {
+    animation-name: animate-A-32-error-banner-appear-reduced;
+  }
+
+  /* A-35 file-modified banner — instant (per spec) */
+  .animate-A-35-file-modified-banner {
+    animation: none;
+  }
+
+  /* A-06, A-19, A-30, A-34 — transition-only or fade-only; instant via globals.css nuclear block */
+
+  /* ── Batch D reduced-motion overrides ── */
+
+  /* A-01 skeleton shimmer — infinite loop; explicit none required (near-zero flash risk) */
+  .animate-A-01-skeleton-shimmer {
+    animation: none;
+  }
+
+  /* A-02 cursor blink — infinite loop; explicit none required */
+  .animate-A-02-cursor-blink {
+    animation: none;
+  }
+
+  /* A-16 tool-use card slide-in — instant (per spec "Instant") */
+  .animate-A-16-tool-card-slide-in {
+    animation: none;
+  }
+
+  /* A-25 skeleton card grid stagger — instant; all cards appear simultaneously (no stagger) */
+  .animate-A-25-card-stagger {
+    animation: none;
+    animation-delay: 0ms;
+  }
+
+  /* A-29 onboarding tour crossfade — fade only, no slide */
+  .animate-A-29-tour-crossfade {
+    animation-name: animate-A-29-tour-crossfade-reduced;
+  }
+
+  /* A-31 plugin slot fade-in — instant (per spec "Instant") */
+  .animate-A-31-plugin-fade-in {
+    animation: none;
+  }
+
+  /* A-36 badge crossfade — instant badge swap (per spec "Instant badge swap") */
+  .animate-A-36-badge-crossfade {
+    animation: none;
+  }
+
+  /* A-37 hook soft banner — fade only, no slide */
+  .animate-A-37-hook-banner-appear {
+    animation-name: animate-A-37-hook-banner-appear-reduced;
+  }
+
+  /* A-38 quarantine banner + shield pulse — static banner, no pulse (per spec) */
+  .animate-A-38-quarantine-banner-appear {
+    animation: none;
+  }
+  .animate-A-38-shield-pulse {
+    animation: none;
+  }
+
+  /* A-40 stripe appear — instant stripe appearance (per spec) */
+  .animate-A-40-stripe-appear {
+    animation: none;
+  }
+
+  /* A-17 edge snap, A-18 node snap, A-20 badge fade, A-26 phase bar, A-36-stripe —
+   * transition-only or fade-only; instant via globals.css nuclear block */
+}
+
+/* Class-based fallback — mirrors @media above. Applied by Storybook
+ * prefers-reduced-motion decorator (Story 2.4) via .prefers-reduced-motion
+ * on <html>. Keeps reduced-motion testable in Storybook without OS setting.
+ */
+.prefers-reduced-motion .animate-A-12-approval-pulse {
+  animation: none;
+}
+.prefers-reduced-motion .animate-A-07-modal-open {
+  animation-name: animate-A-07-modal-open-reduced;
+}
+.prefers-reduced-motion .animate-A-08-modal-close {
+  animation-name: animate-A-08-modal-close-reduced;
+}
+.prefers-reduced-motion .animate-A-09-command-palette-open {
+  animation-name: animate-A-09-command-palette-open-reduced;
+}
+.prefers-reduced-motion .animate-A-39-strict-mode-confirm {
+  animation-name: animate-A-07-modal-open-reduced;
+}
+.prefers-reduced-motion .animate-A-41-dropdown-open {
+  animation-name: animate-A-41-dropdown-open-reduced;
+}
+
+/* Batch C class-based fallbacks */
+.prefers-reduced-motion .animate-A-03-toast-entrance {
+  animation-name: animate-A-03-toast-entrance-reduced;
+}
+.prefers-reduced-motion .animate-A-04-toast-exit {
+  animation-name: animate-A-04-toast-exit-reduced;
+}
+.prefers-reduced-motion .animate-A-23-bell-pop {
+  animation: none;
+}
+.prefers-reduced-motion .animate-A-05-pane-open,
+.prefers-reduced-motion .animate-A-05-pane-close {
+  animation: none;
+}
+.prefers-reduced-motion .animate-A-21-banner-appear {
+  animation: none;
+}
+.prefers-reduced-motion .animate-A-22-banner-dismiss {
+  animation: none;
+}
+.prefers-reduced-motion .animate-A-27-approval-card-in {
+  animation: none;
+}
+.prefers-reduced-motion .animate-A-28-diff-viewer-reveal {
+  animation: none;
+}
+.prefers-reduced-motion .animate-A-32-error-banner-appear {
+  animation-name: animate-A-32-error-banner-appear-reduced;
+}
+.prefers-reduced-motion .animate-A-35-file-modified-banner {
+  animation: none;
+}
+
+/* Batch D class-based fallbacks */
+.prefers-reduced-motion .animate-A-01-skeleton-shimmer {
+  animation: none;
+}
+.prefers-reduced-motion .animate-A-02-cursor-blink {
+  animation: none;
+}
+.prefers-reduced-motion .animate-A-16-tool-card-slide-in {
+  animation: none;
+}
+.prefers-reduced-motion .animate-A-25-card-stagger {
+  animation: none;
+  animation-delay: 0ms;
+}
+.prefers-reduced-motion .animate-A-29-tour-crossfade {
+  animation-name: animate-A-29-tour-crossfade-reduced;
+}
+.prefers-reduced-motion .animate-A-31-plugin-fade-in {
+  animation: none;
+}
+.prefers-reduced-motion .animate-A-36-badge-crossfade {
+  animation: none;
+}
+.prefers-reduced-motion .animate-A-37-hook-banner-appear {
+  animation-name: animate-A-37-hook-banner-appear-reduced;
+}
+.prefers-reduced-motion .animate-A-38-quarantine-banner-appear {
+  animation: none;
+}
+.prefers-reduced-motion .animate-A-38-shield-pulse {
+  animation: none;
+}
+.prefers-reduced-motion .animate-A-40-stripe-appear {
+  animation: none;
+}
+/* A-17, A-18, A-20, A-26, A-36-stripe — transition-only or fade-only;
+ * instant via globals.css nuclear block */

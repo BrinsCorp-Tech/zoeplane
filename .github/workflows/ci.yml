@@ -1,13 +1,20 @@
 name: CI
 
-# Runs on every pull request into main or develop.  All four job types (lint,
-# typecheck, test, build) run across all three target platforms in parallel.
-# fail-fast: false ensures a failure on one platform does not cancel the others —
-# operators need to see which platforms are red.
+# Runs on every pull request into main or develop.  The four job types (lint,
+# typecheck, test, build) are delegated to the reusable _build-matrix.yml
+# workflow (Sprint 2 MED-3 consolidation).  CI-only jobs (scaffold-health,
+# actionlint, design-tokens-check) remain inline here.
 #
-# Branch protection on main should require all matrix legs as required status checks.
-# This is a repo-settings action, not a workflow change.  See PR description for the
-# exact check names to register.
+# Branch protection on main/develop should require these status checks:
+#   lint (macos-latest / windows-latest / ubuntu-22.04)
+#   typecheck (macos-latest / windows-latest / ubuntu-22.04)
+#   test (macos-latest / windows-latest / ubuntu-22.04)
+#   build (macos-latest / windows-latest / ubuntu-22.04)
+#   design-tokens-check
+#   Scaffold Health
+#   Workflow Lint (actionlint)
+# This is a repo-settings action, not a workflow change.
+# See docs/stories/epic-02/SPRINT-2-CARRYOVERS.md for the required-check list.
 
 on:
   pull_request:
@@ -15,15 +22,26 @@ on:
 
 jobs:
   # ──────────────────────────────────────────────────────────────────────────────
-  # lint: ESLint flat config across all workspaces
+  # matrix: delegates lint / typecheck / test / build to the reusable workflow.
+  # scaffold-health is excluded from the matrix (CI-only, platform-invariant).
   # ──────────────────────────────────────────────────────────────────────────────
-  lint:
-    name: Lint (${{ matrix.os }})
-    runs-on: ${{ matrix.os }}
-    strategy:
-      fail-fast: false
-      matrix:
-        os: [macos-latest, windows-latest, ubuntu-22.04]
+  matrix:
+    name: Build Matrix
+    uses: ./.github/workflows/_build-matrix.yml
+    with:
+      artifact-name-prefix: tauri-artifacts
+      artifact-retention-days: 7
+
+  # design-tokens-check: verifies the token pipeline can produce a valid
+  # tokens.css from the DTCG seed JSON. Runs on ubuntu-latest only.
+  # tokens.css is gitignored — CI rebuilds from seed on every run, so this
+  # is a pipeline-health check, not a drift check. Direct-edit drift is
+  # blocked locally by the Husky pre-commit hook (Story 2.1).
+  # Fails if Style Dictionary exits non-zero or produces an empty output file.
+  # Fix: check tokens.seed.json for syntax errors or invalid token references.
+  design-tokens-check:
+    name: Design Tokens Check
+    runs-on: ubuntu-latest
 
     steps:
       - name: Checkout
@@ -37,66 +55,8 @@ jobs:
       - name: Install dependencies
         run: bun install --frozen-lockfile
 
-      - name: Lint (ESLint)
-        run: bun run lint
-
-  # ──────────────────────────────────────────────────────────────────────────────
-  # typecheck: tsc --noEmit across all workspaces
-  # ──────────────────────────────────────────────────────────────────────────────
-  typecheck:
-    name: Typecheck (${{ matrix.os }})
-    runs-on: ${{ matrix.os }}
-    strategy:
-      fail-fast: false
-      matrix:
-        os: [macos-latest, windows-latest, ubuntu-22.04]
-
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Setup Bun
-        uses: oven-sh/setup-bun@v1
-        with:
-          bun-version: latest
-
-      - name: Install dependencies
-        run: bun install --frozen-lockfile
-
-      - name: Typecheck (tsc --noEmit)
-        run: bun run typecheck
-
-  # ──────────────────────────────────────────────────────────────────────────────
-  # test: Vitest unit tests across all platforms
-  # ──────────────────────────────────────────────────────────────────────────────
-  test:
-    name: Unit Tests (${{ matrix.os }})
-    runs-on: ${{ matrix.os }}
-    strategy:
-      fail-fast: false
-      matrix:
-        os: [macos-latest, windows-latest, ubuntu-22.04]
-
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Setup Bun
-        uses: oven-sh/setup-bun@v1
-        with:
-          bun-version: latest
-
-      - name: Install dependencies
-        run: bun install --frozen-lockfile
-
-      - name: Unit tests (Vitest)
-        run: bun run test
-
-      - name: Check tokens completeness
-        # Every semantic token in :root[data-theme="light"] must also exist in
-        # :root[data-theme="dark"].  The script lives in packages/design-tokens.
-        run: |
-          bun run --cwd packages/design-tokens check-tokens || echo "TODO: token-completeness check not yet implemented — add in Sprint 1"
+      - name: Check token drift
+        run: bun run tokens:check
 
   # ──────────────────────────────────────────────────────────────────────────────
   # scaffold-health: fast pre-flight checks that are platform-invariant.
@@ -140,93 +100,13 @@ jobs:
           fail_level: error
 
   # ──────────────────────────────────────────────────────────────────────────────
-  # build: unsigned Tauri platform builds
-  # A failure here indicates a platform-specific compilation issue, not a code
-  # quality failure.  Step names are explicit to distinguish infra failures from
-  # code-level failures in the run log.
-  # ──────────────────────────────────────────────────────────────────────────────
-  build:
-    name: Build (${{ matrix.os }})
-    needs: [lint, typecheck, test, scaffold-health]
-    runs-on: ${{ matrix.os }}
-    strategy:
-      fail-fast: false
-      matrix:
-        os: [macos-latest, windows-latest, ubuntu-22.04]
-        include:
-          - os: macos-latest
-            bundles: app
-          - os: windows-latest
-            bundles: msi,nsis
-          - os: ubuntu-22.04
-            bundles: deb,rpm
-
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Setup Bun
-        uses: oven-sh/setup-bun@v1
-        with:
-          bun-version: latest
-
-      - name: Install Linux system dependencies
-        if: matrix.os == 'ubuntu-22.04'
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y \
-            libwebkit2gtk-4.1-dev \
-            libappindicator3-dev \
-            librsvg2-dev \
-            patchelf
-
-      - name: Setup Rust toolchain
-        uses: dtolnay/rust-toolchain@stable
-
-      - name: Rust cache
-        uses: swatinem/rust-cache@v2
-        with:
-          workspaces: src-tauri
-
-      - name: Install frontend dependencies
-        run: bun install --frozen-lockfile
-
-      - name: Build UI
-        run: bun run --cwd src build
-
-      - name: Build sidecar (bun single-binary)
-        # Produces sidecar/dist/zoeplane-sidecar — bundled for the target platform.
-        # The binary is embedded by Tauri via the `externalBin` config in tauri.conf.json.
-        run: bun run --cwd sidecar build
-
-      - name: Tauri build (unsigned)
-        # Unsigned builds only — signed releases are handled by release.yml (Story 1.5).
-        # --bundles overrides tauri.conf.json bundle.targets for this invocation only,
-        # excluding dmg (macOS) and appimage (Linux) which are flaky on GHA runners.
-        # Signed release.yml reads bundle.targets in full and produces all 7 formats.
-        uses: tauri-apps/tauri-action@v0
-        with:
-          args: --bundles ${{ matrix.bundles }}
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Upload Tauri artifacts
-        uses: actions/upload-artifact@v4
-        if: always()
-        with:
-          name: tauri-artifacts-${{ matrix.os }}
-          path: src-tauri/target/release/bundle/
-          if-no-files-found: ignore
-          retention-days: 7
-
-  # ──────────────────────────────────────────────────────────────────────────────
   # summary: publish a results table to the GitHub Actions step summary.
   # Runs after all jobs regardless of outcome (if: always()).
   # ──────────────────────────────────────────────────────────────────────────────
   summary:
     name: Summary
     runs-on: ubuntu-22.04
-    needs: [lint, typecheck, test, scaffold-health, actionlint, build]
+    needs: [matrix, design-tokens-check, scaffold-health, actionlint]
     if: always()
     steps:
       - name: Publish results table
@@ -236,10 +116,8 @@ jobs:
             echo ""
             echo "| Job | Status |"
             echo "|-----|--------|"
-            echo "| Lint | ${{ needs.lint.result }} |"
-            echo "| Typecheck | ${{ needs.typecheck.result }} |"
-            echo "| Unit Tests | ${{ needs.test.result }} |"
+            echo "| Build Matrix (lint / typecheck / test / build) | ${{ needs.matrix.result }} |"
+            echo "| Design Tokens Check | ${{ needs.design-tokens-check.result }} |"
             echo "| Scaffold Health | ${{ needs.scaffold-health.result }} |"
             echo "| Workflow Lint (actionlint) | ${{ needs.actionlint.result }} |"
-            echo "| Build | ${{ needs.build.result }} |"
           } >> "$GITHUB_STEP_SUMMARY"

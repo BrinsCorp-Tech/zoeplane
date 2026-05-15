@@ -1,3 +1,4 @@
+import { fileURLToPath } from "node:url";
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 
@@ -42,14 +43,17 @@ export default defineConfig({
     target: "es2022",
   },
 
-  // Path resolution — keep imports clean
+  // Path resolution — keep imports clean.
+  // Use fileURLToPath for ESM-correct absolute path resolution.
+  // Previous "/src" form was a filesystem absolute path (broken since Story 1.1
+  // but never exercised in app code until Story 2.6 Batch E imported Toast into main.tsx).
   resolve: {
     alias: {
-      "@": "/src",
+      "@": fileURLToPath(new URL("./", import.meta.url)),
       // @host/ → Tauri host bindings (src-tauri/)
-      "@host": "../src-tauri",
+      "@host": fileURLToPath(new URL("../src-tauri", import.meta.url)),
       // @sdk/ → Plugin SDK public surface (packages/plugin-sdk/src/)
-      "@sdk": "../packages/plugin-sdk/src",
+      "@sdk": fileURLToPath(new URL("../packages/plugin-sdk/src", import.meta.url)),
     },
   },
 });

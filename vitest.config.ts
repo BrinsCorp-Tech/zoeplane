@@ -1,6 +1,19 @@
+import { fileURLToPath } from "node:url";
 import { defineConfig } from "vitest/config";
+import react from "@vitejs/plugin-react";
 
 export default defineConfig({
+  plugins: [react()],
+
+  // Alias resolution mirrors src/vite.config.ts — @/ resolves to src/
+  // so test files importing "@/lib/utils", "@/components/ui/..." work identically
+  // to production code without path duplication.
+  resolve: {
+    alias: {
+      "@": fileURLToPath(new URL("./src", import.meta.url)),
+    },
+  },
+
   test: {
     // Only scan project source — never third-party caches or node_modules.
     include: [
@@ -11,12 +24,12 @@ export default defineConfig({
     ],
     // Belt-and-suspenders: exclude Bun's local package cache and node_modules
     // even though include already scopes us to project source.
-    exclude: [
-      "**/node_modules/**",
-      "**/.bun-cache/**",
-      "**/dist/**",
-    ],
+    exclude: ["**/node_modules/**", "**/.bun-cache/**", "**/dist/**"],
     // No test files exist yet in the skeleton — pass rather than error.
     passWithNoTests: true,
+
+    // JSDOM environment for React component tests (ThemeProvider axe harness, etc.)
+    // File-level overrides via `// @vitest-environment node` for non-DOM tests.
+    environment: "jsdom",
   },
 });

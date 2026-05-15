@@ -2,7 +2,8 @@ name: Nightly
 
 # Runs daily at 07:00 UTC against main.
 # Also dispatchable manually for ad-hoc verification.
-# Executes the same lint/typecheck/test/build matrix as ci.yml.
+# Delegates lint / typecheck / test / build to the reusable _build-matrix.yml
+# workflow (Sprint 2 MED-3 consolidation).
 # Artifact summaries are uploaded so failures are easy to triage from the
 # workflow run page without downloading the full run log.
 
@@ -13,170 +14,17 @@ on:
 
 jobs:
   # ──────────────────────────────────────────────────────────────────────────────
-  # lint: ESLint flat config across all workspaces
+  # matrix: delegates lint / typecheck / test / build to the reusable workflow.
+  # checkout-ref: main ensures nightly always runs against the release branch.
+  # artifact-retention-days: 14 gives nightly a longer triage window than CI PRs.
   # ──────────────────────────────────────────────────────────────────────────────
-  lint:
-    name: Lint (${{ matrix.os }})
-    runs-on: ${{ matrix.os }}
-    strategy:
-      fail-fast: false
-      matrix:
-        os: [macos-latest, windows-latest, ubuntu-22.04]
-
-    steps:
-      - name: Checkout main
-        uses: actions/checkout@v4
-        with:
-          ref: main
-
-      - name: Setup Bun
-        uses: oven-sh/setup-bun@v1
-        with:
-          bun-version: latest
-
-      - name: Install dependencies
-        run: bun install --frozen-lockfile
-
-      - name: Lint (ESLint)
-        run: bun run lint
-
-  # ──────────────────────────────────────────────────────────────────────────────
-  # typecheck: tsc --noEmit across all workspaces
-  # ──────────────────────────────────────────────────────────────────────────────
-  typecheck:
-    name: Typecheck (${{ matrix.os }})
-    runs-on: ${{ matrix.os }}
-    strategy:
-      fail-fast: false
-      matrix:
-        os: [macos-latest, windows-latest, ubuntu-22.04]
-
-    steps:
-      - name: Checkout main
-        uses: actions/checkout@v4
-        with:
-          ref: main
-
-      - name: Setup Bun
-        uses: oven-sh/setup-bun@v1
-        with:
-          bun-version: latest
-
-      - name: Install dependencies
-        run: bun install --frozen-lockfile
-
-      - name: Typecheck (tsc --noEmit)
-        run: bun run typecheck
-
-  # ──────────────────────────────────────────────────────────────────────────────
-  # test: Vitest unit tests across all platforms
-  # ──────────────────────────────────────────────────────────────────────────────
-  test:
-    name: Unit Tests (${{ matrix.os }})
-    runs-on: ${{ matrix.os }}
-    strategy:
-      fail-fast: false
-      matrix:
-        os: [macos-latest, windows-latest, ubuntu-22.04]
-
-    steps:
-      - name: Checkout main
-        uses: actions/checkout@v4
-        with:
-          ref: main
-
-      - name: Setup Bun
-        uses: oven-sh/setup-bun@v1
-        with:
-          bun-version: latest
-
-      - name: Install dependencies
-        run: bun install --frozen-lockfile
-
-      - name: Unit tests (Vitest)
-        run: bun run test
-
-      - name: Check tokens completeness
-        run: |
-          bun run --cwd packages/design-tokens check-tokens || echo "TODO: token-completeness check not yet implemented"
-
-  # ──────────────────────────────────────────────────────────────────────────────
-  # build: unsigned Tauri platform builds
-  # Artifacts uploaded for every leg so nightly regressions are easy to triage.
-  # ──────────────────────────────────────────────────────────────────────────────
-  build:
-    name: Build (${{ matrix.os }})
-    runs-on: ${{ matrix.os }}
-    strategy:
-      fail-fast: false
-      matrix:
-        os: [macos-latest, windows-latest, ubuntu-22.04]
-        include:
-          - os: macos-latest
-            bundles: app
-          - os: windows-latest
-            bundles: msi,nsis
-          - os: ubuntu-22.04
-            bundles: deb,rpm
-
-    steps:
-      - name: Checkout main
-        uses: actions/checkout@v4
-        with:
-          ref: main
-
-      - name: Setup Bun
-        uses: oven-sh/setup-bun@v1
-        with:
-          bun-version: latest
-
-      - name: Install Linux system dependencies
-        if: matrix.os == 'ubuntu-22.04'
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y \
-            libwebkit2gtk-4.1-dev \
-            libappindicator3-dev \
-            librsvg2-dev \
-            patchelf
-
-      - name: Setup Rust toolchain
-        uses: dtolnay/rust-toolchain@stable
-
-      - name: Rust cache
-        uses: swatinem/rust-cache@v2
-        with:
-          workspaces: src-tauri
-
-      - name: Install frontend dependencies
-        run: bun install --frozen-lockfile
-
-      - name: Build UI
-        run: bun run --cwd src build
-
-      - name: Build sidecar (bun single-binary)
-        run: bun run --cwd sidecar build
-
-      - name: Tauri build (unsigned)
-        # --bundles overrides tauri.conf.json bundle.targets for this invocation only,
-        # excluding dmg (macOS) and appimage (Linux) which are flaky on GHA runners.
-        # Signed release.yml reads bundle.targets in full and produces all 7 formats.
-        uses: tauri-apps/tauri-action@v0
-        with:
-          args: --bundles ${{ matrix.bundles }}
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Upload Tauri artifacts
-        # Upload on success AND failure so infra failures still produce artifacts
-        # (or a clear absence of them) distinguishable from build failures.
-        uses: actions/upload-artifact@v4
-        if: always()
-        with:
-          name: nightly-artifacts-${{ matrix.os }}
-          path: src-tauri/target/release/bundle/
-          if-no-files-found: ignore
-          retention-days: 14
+  matrix:
+    name: Build Matrix
+    uses: ./.github/workflows/_build-matrix.yml
+    with:
+      checkout-ref: main
+      artifact-name-prefix: nightly-artifacts
+      artifact-retention-days: 14
 
   # ──────────────────────────────────────────────────────────────────────────────
   # summary: collect job statuses and write a run-level summary
@@ -185,7 +33,7 @@ jobs:
   summary:
     name: Nightly Summary
     runs-on: ubuntu-22.04
-    needs: [lint, typecheck, test, build]
+    needs: [matrix]
     if: always()
 
     steps:
@@ -196,10 +44,7 @@ jobs:
             echo ""
             echo "| Job | Status |"
             echo "|-----|--------|"
-            echo "| lint | ${{ needs.lint.result }} |"
-            echo "| typecheck | ${{ needs.typecheck.result }} |"
-            echo "| test | ${{ needs.test.result }} |"
-            echo "| build | ${{ needs.build.result }} |"
+            echo "| Build Matrix (lint / typecheck / test / build) | ${{ needs.matrix.result }} |"
             echo ""
             echo "Artifacts retained for 14 days. See individual job logs for details."
           } >> "$GITHUB_STEP_SUMMARY"
