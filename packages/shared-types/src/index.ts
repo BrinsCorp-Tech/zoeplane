@@ -120,6 +120,18 @@ export type RunEventType =
 export type { ProjectContext, ProjectOpenEvent, ProjectCloseEvent } from "./project";
 
 // ============================================================
+// FS Watcher events (Epic 03, Story 3.2)
+// ============================================================
+
+export type {
+  AssetIndexUpdatedEvent,
+  WatcherStartedEvent,
+  WatcherErrorEvent,
+  WatcherEvent,
+} from "./watcher";
+export { WATCHER_ASSET_UPDATED, WATCHER_STARTED, WATCHER_ERROR } from "./watcher";
+
+// ============================================================
 // User preferences
 // ============================================================
 
