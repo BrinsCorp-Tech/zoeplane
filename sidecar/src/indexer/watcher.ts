@@ -21,7 +21,7 @@
 import { watch as chokidarWatch, type FSWatcher } from "chokidar";
 import { homedir } from "node:os";
 import { join, resolve } from "node:path";
-import { existsSync, accessSync, constants as fsConstants } from "node:fs";
+import { existsSync, accessSync, constants as fsConstants, lstatSync, realpathSync } from "node:fs";
 import { log } from "../log";
 import {
   WATCHER_ASSET_UPDATED,
@@ -224,7 +224,20 @@ function ensureWatcher(): FSWatcher {
   watcher = chokidarWatch([], {
     persistent: true,
     ignoreInitial: true, // Don't emit events for existing files at startup.
-    followSymlinks: false,
+    // followSymlinks: true is REQUIRED. The PAI deployment model ships
+    // ~/.claude/{skills,agents,commands,teams,workflows} as symbolic links into
+    // a version-controlled pai-config/ tree (chezmoi/yadm/stow setups do the
+    // same). When followSymlinks is false, chokidar v5's _addToNodeFs handler
+    // (handler.js:580-602) uses lstat, which returns isDirectory()=false for
+    // symlinks. This routes the root through the symlink branch, which calls
+    // _handleDir on the PARENT directory and skips _handleRead entirely — the
+    // recursive walk never starts, so no child events fire.
+    // With followSymlinks: true, chokidar uses stat (which follows the link),
+    // isDirectory() returns true for symlinked directories, and the recursive
+    // walk proceeds normally. chokidar's internal _symlinkPaths visited-set
+    // prevents infinite loops from cyclic symlinks. See ADR-005 §"Symlinked
+    // Watch Roots" for the full analysis and trade-off documentation.
+    followSymlinks: true,
     usePolling: false, // Use node:fs.watch (kernel-level FS events) natively.
     // chokidar v5 swallows EACCES/EPERM internally at runtime to prevent
     // crashes. Start-time errors are surfaced via explicit existsSync +
@@ -326,7 +339,26 @@ export function startGlobalWatcher(): void {
     globalRoots.add(resolve(root));
     fsw.add(root);
 
-    log("INFO", "Watcher: registered global root", { root });
+    // Defense-in-depth: detect symlinked roots at registration time so that
+    // any future regression (followSymlinks flip) is immediately diagnosable
+    // from startup logs without code archaeology (CR-5, 2026-05-16).
+    let symlink = false;
+    let target: string | null = null;
+    try {
+      const lst = lstatSync(root);
+      symlink = lst.isSymbolicLink();
+    } catch {
+      log("WARN", "Watcher: lstat failed on global root (defaulting symlink=false)", { root });
+    }
+    if (symlink) {
+      try {
+        target = realpathSync(root);
+      } catch {
+        log("WARN", "Watcher: symlink target is unreachable (broken symlink?)", { root });
+      }
+    }
+
+    log("INFO", "Watcher: registered global root", { root, symlink, target });
 
     const event: WatcherStartedEvent = {
       type: WATCHER_STARTED,
@@ -379,9 +411,32 @@ export function startProjectWatcher(projectRoot: string): void {
   const fsw = ensureWatcher();
   fsw.add(claudePath);
 
+  // Defense-in-depth: detect symlinked project .claude/ roots at registration
+  // time so symlink-related watch failures are diagnosable from startup logs
+  // (CR-5, 2026-05-16).
+  let symlink = false;
+  let target: string | null = null;
+  try {
+    const lst = lstatSync(claudePath);
+    symlink = lst.isSymbolicLink();
+  } catch {
+    log("WARN", "Watcher: lstat failed on project .claude/ path (defaulting symlink=false)", {
+      claudePath,
+    });
+  }
+  if (symlink) {
+    try {
+      target = realpathSync(claudePath);
+    } catch {
+      log("WARN", "Watcher: symlink target is unreachable (broken symlink?)", { claudePath });
+    }
+  }
+
   log("INFO", "Watcher: registered project root", {
     projectRoot: resolvedRoot,
     watchPath: resolvedClaudePath,
+    symlink,
+    target,
   });
 
   const event: WatcherStartedEvent = {
@@ -476,3 +531,25 @@ export async function stopWatcher(): Promise<void> {
     cancelledCoalescingTimers: pendingTimers,
   });
 }
+
+// ---------------------------------------------------------------------------
+// Test-only exports — available only when NODE_ENV === "test"
+// Do NOT import in production code paths.
+// ---------------------------------------------------------------------------
+
+/**
+ * @internal TEST ONLY
+ * Start a watcher against arbitrary root paths. Callers subscribe via
+ * `subscribeToWatcherEvents` separately. Used by integration tests to avoid touching ~/.claude/.
+ * Callers must call stopWatcher() in afterEach to clean up the shared instance.
+ */
+export const __test_only__startWatcherForRoots: ((roots: string[]) => void) | undefined =
+  process.env.NODE_ENV === "test"
+    ? (roots: string[]) => {
+        const fsw = ensureWatcher();
+        for (const root of roots) {
+          globalRoots.add(resolve(root));
+          fsw.add(root);
+        }
+      }
+    : undefined;

@@ -182,6 +182,40 @@ exhaustion):
   This ADR does not change that requirement — it only clarifies that the sidecar watcher
   itself does not use Tauri's FS capability model.
 
+## Symlinked Watch Roots (`followSymlinks: true`)
+
+**Amendment date: 2026-05-16 (CR-5)**
+
+The ZoePlane sidecar runs with `followSymlinks: true`. The PAI deployment model ships
+`~/.claude/{skills,agents,commands,teams,workflows}` as symbolic links into a
+version-controlled `pai-config/` tree. chokidar 5.0.0's symlink dispatch in `_addToNodeFs`
+(handler.js:602) routes symlinked watch roots through a code path that **skips the recursive
+directory walk** when `followSymlinks` is false — only the symlink entry itself in the parent
+directory is watched, producing the symptom that events fire for file-typed roots (e.g.,
+`settings.json`) but not for any path inside a directory-typed root.
+
+chokidar v5 walks subdirectories manually via `readdirp` (it does NOT use `fs.watch`'s
+`recursive` option). The walk is gated on `stats.isDirectory()`, which `lstat` reports as
+`false` for symlinks. `followSymlinks: true` switches the stat method to `stat`, which
+follows the symlink and reports `isDirectory: true` for symlinked directories — enabling the
+recursive walk.
+
+Trade-off accepted: chokidar will follow symlinks recursively inside watched trees, bounded
+by its internal `_symlinkPaths` visited-set to prevent cycles. For v1 the watch roots are
+operator-controlled paths; untrusted symlink injection is not a concern. If untrusted project
+trees become a watched surface (Epic 04 plugin sandbox, multi-tenant workspaces), revisit
+with an explicit `ignored` matcher that rejects symlink targets outside the watch root.
+
+## Observability
+
+Startup logs include `symlink: boolean` and `target: string | null` fields on every
+"Watcher: registered global root" and "Watcher: registered project root" log line. A `true`
+symlink field with the resolved `realpath` target means: this root is a symlink and chokidar
+is following it into the real directory tree. This field surfaces the CR-5 class of bug
+without code archaeology — if a future regression flips `followSymlinks` back to `false`,
+the `symlink: true` entries in startup logs will immediately identify which roots were
+affected.
+
 ## Alternatives Considered
 
 ### Rust `notify` crate (Option A — rejected)
@@ -192,6 +226,15 @@ Rust ↔ sidecar coordination protocol, and extends the Rust core beyond its est
 responsibility boundary (ADR-002). Reconsider if benchmarks show the sidecar path adds
 unacceptable per-event latency at high event volume (>1000 events/sec sustained) — but this
 threshold is not anticipated for the `~/.claude/` tree at typical usage.
+
+### `followSymlinks: false` — REJECTED
+
+Silently breaks on any symlinked watch root with zero diagnostics. Discovered 2026-05-16
+(CR-5). PAI/chezmoi/yadm/stow dotfile managers and corporate shared-config setups routinely
+symlink the watched roots (`~/.claude/skills`, `~/.claude/agents`, etc.). With
+`followSymlinks: false`, chokidar registers the symlink entry in the parent directory but
+never walks the subtree, so no child events fire. The bug is silent — no error, no warning,
+no diagnostic — making it extremely difficult to diagnose without reading chokidar internals.
 
 ### Bun's native `watch` API
 
