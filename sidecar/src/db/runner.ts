@@ -149,6 +149,13 @@ function discoverPendingMigrations(
 
   const MIGRATION_RE = /^(\d+)_(.+)\.sql$/;
   const pending: PendingMigration[] = [];
+  // Detect duplicate version numbers across the discovered files.  iCloud Drive,
+  // Dropbox, OneDrive, and ad-hoc `cp` operations can produce sibling copies like
+  // "002_asset_index 2.sql" alongside "002_asset_index.sql".  Both files parse to
+  // version 2; without this guard the runner would apply one (succeeding) and then
+  // crash on the second with "table already exists", killing the sidecar on every
+  // clean-state boot.  Fail loud at discovery instead.
+  const versionToFiles = new Map<number, string[]>();
 
   for (const file of files) {
     const match = MIGRATION_RE.exec(file);
@@ -171,6 +178,13 @@ function discoverPendingMigrations(
       continue;
     }
 
+    const existing = versionToFiles.get(version);
+    if (existing !== undefined) {
+      existing.push(file);
+    } else {
+      versionToFiles.set(version, [file]);
+    }
+
     const name = file; // full filename serves as the canonical name
 
     if (appliedSet.has(version)) {
@@ -179,6 +193,24 @@ function discoverPendingMigrations(
     }
 
     pending.push({ version, name, filePath: join(migrationsDir, file) });
+  }
+
+  // Reject duplicate version numbers.  Each version must map to exactly one file.
+  const duplicates: Array<{ version: number; files: string[] }> = [];
+  for (const [version, fileList] of versionToFiles.entries()) {
+    if (fileList.length > 1) {
+      duplicates.push({ version, files: fileList.slice().sort() });
+    }
+  }
+  if (duplicates.length > 0) {
+    log(
+      "ERROR",
+      "Migration runner: duplicate migration version numbers detected — refusing to apply. " +
+        "Common cause: cloud-sync conflict copies (iCloud Drive / Dropbox / OneDrive) " +
+        'creating "<original> 2.sql" siblings.  Remove the duplicates and retry.',
+      { migrationsDir, duplicates }
+    );
+    process.exit(1);
   }
 
   // Sort ascending by version number.
