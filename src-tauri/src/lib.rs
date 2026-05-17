@@ -419,8 +419,22 @@ fn spawn_sidecar(app: &AppHandle) -> Result<(), Box<dyn std::error::Error>> {
                 }
                 CommandEvent::Stderr(line_bytes) => {
                     let line = String::from_utf8_lossy(&line_bytes);
+                    let trimmed = line.trim();
                     // Sidecar writes structured JSON to stderr for lifecycle events.
-                    info!(target: "sidecar-lifecycle", stderr = %line.trim());
+                    // Route each line through the Rust tracing layer at the level
+                    // declared inside the JSON payload, so sidecar ERROR/WARN
+                    // messages remain visible at default RUST_LOG=warn.  Non-JSON
+                    // lines (panic backtraces, runtime crash output) fall through
+                    // to INFO so they aren't lost when tracing is filtered tightly.
+                    match serde_json::from_str::<serde_json::Value>(trimmed)
+                        .ok()
+                        .and_then(|v| v.get("level").and_then(|l| l.as_str()).map(str::to_owned))
+                        .as_deref()
+                    {
+                        Some("ERROR") => error!(target: "sidecar-lifecycle", stderr = %trimmed),
+                        Some("WARN") => warn!(target: "sidecar-lifecycle", stderr = %trimmed),
+                        _ => info!(target: "sidecar-lifecycle", stderr = %trimmed),
+                    }
                 }
                 CommandEvent::Terminated(payload) => {
                     let code = payload.code;
