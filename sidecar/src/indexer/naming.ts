@@ -19,7 +19,7 @@
 //   team      → <root>/teams/<name>/TEAM.md         → name = <name>
 //   workflow  → <root>/workflows/<name>/WORKFLOW.md → name = <name>
 
-import { relative, extname } from "node:path";
+import { relative, extname, sep, join } from "node:path";
 
 // ---------------------------------------------------------------------------
 // Supported asset kinds (mirrors scanner.ts — keep in sync)
@@ -78,11 +78,14 @@ export function pathToAssetIdentifier(
 ): AssetIdentifier | null {
   for (const [kindStr, dirName] of Object.entries(KIND_DIR_NAME)) {
     const kind = kindStr as AssetKind;
-    const kindRoot = `${claudeRoot}/${dirName}`;
+    // Filesystem path: use platform-native separator (sep === "\\" on Windows,
+    // "/" on POSIX). The output `name` below is always POSIX-style ("/") so
+    // asset.name values are stable across platforms.
+    const kindRoot = join(claudeRoot, dirName);
 
     // Normalise: ensure the path starts with the kind root + separator so we
     // don't accidentally match a prefix (e.g., `skills2/` treated as `skills/`).
-    if (!absolutePath.startsWith(kindRoot + "/")) {
+    if (!absolutePath.startsWith(kindRoot + sep)) {
       continue;
     }
 
@@ -92,8 +95,9 @@ export function pathToAssetIdentifier(
       // subdir-canonical layout: <kindRoot>/<assetName>/<canonicalFile>
       // Only match the canonical file; ignore other files inside the subdir.
       const relFromKindRoot = relative(kindRoot, absolutePath);
-      // relFromKindRoot should be exactly "<assetName>/<canonicalFile>"
-      const segments = relFromKindRoot.split("/");
+      // relFromKindRoot should be exactly "<assetName><sep><canonicalFile>"
+      // (relative() returns platform-native separators; split on sep accordingly)
+      const segments = relFromKindRoot.split(sep);
       if (segments.length !== 2) {
         return null; // Too deep or at root — not a canonical asset file.
       }
@@ -105,7 +109,7 @@ export function pathToAssetIdentifier(
     } else {
       // direct-md layout: <kindRoot>/<name>.md  or  <kindRoot>/<sub>/<name>.md
       const relFromKindRoot = relative(kindRoot, absolutePath);
-      const segments = relFromKindRoot.split("/");
+      const segments = relFromKindRoot.split(sep);
 
       if (segments.length === 1) {
         // Flat: agents/architect.md → name = "architect"
@@ -117,6 +121,8 @@ export function pathToAssetIdentifier(
         return { kind, name };
       } else if (segments.length === 2) {
         // Nested: commands/consider/first-principles.md → name = "consider/first-principles"
+        // Output name uses POSIX "/" regardless of platform — asset.name is a
+        // canonical cross-platform identifier, not a filesystem path.
         const [subdir, fileName] = segments;
         if (extname(fileName) !== ".md") {
           return null; // Not a .md file.
@@ -141,10 +147,11 @@ export function pathToAssetIdentifier(
  *
  * @example
  *   kindRootForClaudeDir("/home/user/.claude", "skill")
- *   // → "/home/user/.claude/skills"
+ *   // → "/home/user/.claude/skills"  (POSIX)
+ *   // → "C:\\Users\\u\\.claude\\skills"  (Windows, with native separator)
  */
 export function kindRootForClaudeDir(claudeRoot: string, kind: AssetKind): string {
-  return `${claudeRoot}/${KIND_DIR_NAME[kind]}`;
+  return join(claudeRoot, KIND_DIR_NAME[kind]);
 }
 
 // Re-export the mapping for callers that iterate over all kinds.
