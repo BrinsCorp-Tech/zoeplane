@@ -26,6 +26,9 @@ export const WATCHER_STARTED = "watcher:started" as const;
 /** SSE event type name for WatcherErrorEvent. */
 export const WATCHER_ERROR = "watcher:error" as const;
 
+/** SSE event type name for AssetIndexHydratedEvent. */
+export const ASSET_INDEX_HYDRATED = "asset:index:hydrated" as const;
+
 // ============================================================
 // Event shapes
 // ============================================================
@@ -93,5 +96,52 @@ export interface WatcherErrorEvent {
   reason: string;
 }
 
+/**
+ * Emitted once after `runColdLaunchScan()` completes at sidecar startup.
+ * Carries totals for each asset kind plus elapsed time so the UI sidebar
+ * can populate item-count badges (loading-architecture §"cold-launch badges").
+ *
+ * Story 3.3 is the sole emitter. Consumed by Epic 06 sidebar rendering.
+ */
+export interface AssetIndexHydratedEvent {
+  type: typeof ASSET_INDEX_HYDRATED;
+  /**
+   * Number of global-scope skill files enumerated and submitted for insert.
+   * Some may be no-ops on re-launch due to `ON CONFLICT DO NOTHING` in the DB layer.
+   */
+  skills: number;
+  /**
+   * Number of global-scope agent files enumerated and submitted for insert.
+   * Some may be no-ops on re-launch due to `ON CONFLICT DO NOTHING` in the DB layer.
+   */
+  agents: number;
+  /**
+   * Number of global-scope command files enumerated and submitted for insert.
+   * Some may be no-ops on re-launch due to `ON CONFLICT DO NOTHING` in the DB layer.
+   */
+  commands: number;
+  /**
+   * Number of global-scope team files enumerated and submitted for insert.
+   * Some may be no-ops on re-launch due to `ON CONFLICT DO NOTHING` in the DB layer.
+   */
+  teams: number;
+  /**
+   * Number of global-scope workflow files enumerated and submitted for insert.
+   * Some may be no-ops on re-launch due to `ON CONFLICT DO NOTHING` in the DB layer.
+   */
+  workflows: number;
+  /**
+   * Total project-scoped files enumerated and submitted for insert across all project roots.
+   * Some may be no-ops on re-launch due to `ON CONFLICT DO NOTHING` in the DB layer.
+   */
+  projectScopedCount: number;
+  /** Elapsed time in milliseconds from scan start to event emission. */
+  elapsedMs: number;
+}
+
 /** Union of all watcher event types for exhaustive switching in consumers. */
-export type WatcherEvent = AssetIndexUpdatedEvent | WatcherStartedEvent | WatcherErrorEvent;
+export type WatcherEvent =
+  | AssetIndexUpdatedEvent
+  | WatcherStartedEvent
+  | WatcherErrorEvent
+  | AssetIndexHydratedEvent;

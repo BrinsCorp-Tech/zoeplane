@@ -33,7 +33,10 @@ import {
   stopWatcher,
   subscribeToWatcherEvents,
 } from "./indexer/watcher";
-import type { WatcherEvent } from "@zoeplane/shared-types";
+import { runColdLaunchScan, subscribeToScannerEvents } from "./indexer/scanner";
+import { runShadowRecomputeAll, recomputeShadows } from "./indexer/resolver";
+import { pathToAssetIdentifier } from "./indexer/naming";
+import { type WatcherEvent, WATCHER_ASSET_UPDATED } from "@zoeplane/shared-types";
 
 // ---------------------------------------------------------------------------
 // CLI argument parsing — DB path (required, supplied by Tauri shell at spawn)
@@ -150,7 +153,8 @@ const server = Bun.serve({
     // the client knows the stream is live.
     // ------------------------------------------------------------------
     if (url.pathname === "/events" && req.method === "GET") {
-      let unsubscribe: (() => void) | null = null;
+      let unsubscribeWatcher: (() => void) | null = null;
+      let unsubscribeScanner: (() => void) | null = null;
 
       const stream = new ReadableStream<Uint8Array>({
         start(controller) {
@@ -160,19 +164,27 @@ const server = Bun.serve({
           // live stream rather than a hanging connection.
           controller.enqueue(encoder.encode(": connected\n\n"));
 
-          unsubscribe = subscribeToWatcherEvents((event: WatcherEvent) => {
+          const sendEvent = (event: WatcherEvent): void => {
             try {
               const data = `data: ${JSON.stringify(event)}\n\n`;
               controller.enqueue(encoder.encode(data));
             } catch {
               // Controller may be closed if the client disconnected.
             }
-          });
+          };
+
+          // Subscribe to both watcher events and scanner events (AssetIndexHydratedEvent).
+          unsubscribeWatcher = subscribeToWatcherEvents(sendEvent);
+          unsubscribeScanner = subscribeToScannerEvents(sendEvent);
         },
         cancel() {
-          if (unsubscribe !== null) {
-            unsubscribe();
-            unsubscribe = null;
+          if (unsubscribeWatcher !== null) {
+            unsubscribeWatcher();
+            unsubscribeWatcher = null;
+          }
+          if (unsubscribeScanner !== null) {
+            unsubscribeScanner();
+            unsubscribeScanner = null;
           }
         },
       });
@@ -254,14 +266,126 @@ process.stdout.write(JSON.stringify({ port: server.port }) + "\n");
 log("INFO", "ZoePlane sidecar HTTP server ready", { hostname: "127.0.0.1", port: server.port });
 
 // ---------------------------------------------------------------------------
-// FS Watcher startup (Epic 03, Story 3.2)
-// Start the global watcher after the HTTP server is ready so that
-// WatcherStartedEvent emissions have an active SSE stream to fan out on.
+// Cold-launch asset scan (Epic 03, Story 3.3)
+// Sequencing: runMigrations() → runColdLaunchScan()
+//             → runShadowRecomputeAll() (Story 3.4)
+//             → startGlobalWatcher() (Story 3.2)
+//
+// Shadow recompute runs AFTER the cold-launch scan so that all INSERT OR IGNORE
+// rows are committed before we stamp shadowed_by_project_id. This is required
+// on every launch (not just first) because INSERT OR IGNORE leaves existing rows
+// untouched (shadowed_by_project_id stays NULL from the previous run's state).
 // ---------------------------------------------------------------------------
 
-startGlobalWatcher();
+void runColdLaunchScan(db)
+  .then((totals) => {
+    log("INFO", "ZoePlane sidecar cold-launch scan complete — running shadow recompute", {
+      totals,
+    });
+    // ---------------------------------------------------------------------------
+    // Shadow recompute (Epic 03, Story 3.4)
+    // Stamps shadowed_by_project_id on global rows that have project-scoped
+    // counterparts. Must run before the FS watcher starts to ensure the index
+    // reflects the current overlay state before any real-time events fire.
+    // ---------------------------------------------------------------------------
+    runShadowRecomputeAll(db);
+    log("INFO", "ZoePlane sidecar shadow recompute complete — starting FS watcher");
+    // ---------------------------------------------------------------------------
+    // FS Watcher startup (Epic 03, Story 3.2)
+    // Start the global watcher after the cold-launch scan so that
+    // WatcherStartedEvent emissions have an active SSE stream to fan out on,
+    // and the index already has a warm baseline before the first event fires.
+    // ---------------------------------------------------------------------------
+    startGlobalWatcher();
+    log("INFO", "ZoePlane sidecar FS watcher started");
+  })
+  .catch((err: unknown) => {
+    log("ERROR", "ZoePlane sidecar cold-launch scan failed — starting FS watcher anyway", {
+      error: String(err),
+    });
+    // Start the watcher even if the scan fails so real-time events still flow.
+    startGlobalWatcher();
+    log("INFO", "ZoePlane sidecar FS watcher started (post-scan-failure fallback)");
+  });
 
-log("INFO", "ZoePlane sidecar FS watcher started");
+// ---------------------------------------------------------------------------
+// Per-event shadow recompute (Epic 03, Story 3.4)
+//
+// Subscribes to AssetIndexUpdatedEvent from the watcher. On each event that
+// touches an asset file under a project's .claude/ tree, we derive the
+// (kind, name) pair via the shared naming helper and call a narrow
+// recomputeShadows() for that pair only — keeping per-event work O(1) rather
+// than O(project assets).
+//
+// Events under global roots (projectRoot=null) do NOT trigger a narrow
+// recompute here: global changes affect all projects' shadow states, so Story
+// 3.8 (silent reindex) will handle the broader invalidation. For Sprint 3 v1
+// the per-event path covers the project-scoped overlay case only.
+// ---------------------------------------------------------------------------
+
+subscribeToWatcherEvents((event: WatcherEvent) => {
+  // LOW-1: use the discriminated-union type narrowing (event.type literal)
+  // instead of an unsafe `as AssetIndexUpdatedEvent` cast.
+  if (event.type !== WATCHER_ASSET_UPDATED) {
+    return;
+  }
+
+  // TypeScript now knows event is AssetIndexUpdatedEvent via the type guard above.
+  const { path: assetPath, projectRoot, eventKind } = event;
+
+  // Only process project-scoped events (projectRoot is non-null for project .claude/ trees).
+  if (projectRoot === null) {
+    return;
+  }
+
+  // Derive (kind, name) from the absolute path using the shared naming helper.
+  const claudeRoot = join(projectRoot, ".claude");
+  const identifier = pathToAssetIdentifier(assetPath, claudeRoot);
+
+  if (identifier === null) {
+    // Path is not a recognised asset file (e.g., intermediate directory, .DS_Store).
+    return;
+  }
+
+  // Look up the project_id for this projectRoot — projects.path is the FK.
+  interface ProjectIdRow {
+    id: string;
+  }
+  const projectRow = db
+    .query<
+      ProjectIdRow,
+      [string]
+    >("SELECT id FROM projects WHERE path = ? AND deleted_at IS NULL LIMIT 1")
+    .get(projectRoot);
+
+  if (projectRow === null) {
+    log("WARN", "Sidecar: AssetIndexUpdatedEvent projectRoot not found in projects table", {
+      projectRoot,
+      assetPath,
+    });
+    return;
+  }
+
+  log("INFO", "Sidecar: per-event shadow recompute triggered", {
+    projectId: projectRow.id,
+    kind: identifier.kind,
+    name: identifier.name,
+    eventKind,
+  });
+
+  // MEDIUM-3: wrap in try/catch so a per-event recompute failure is visible in
+  // logs but does not crash the subscriber loop or silence future events.
+  try {
+    recomputeShadows(db, projectRow.id, { kind: identifier.kind, name: identifier.name });
+  } catch (err) {
+    log("ERROR", "Sidecar: per-event shadow recompute failed", {
+      projectId: projectRow.id,
+      kind: identifier.kind,
+      name: identifier.name,
+      error: String(err),
+    });
+  }
+});
 
 // ---------------------------------------------------------------------------
 // Signal handlers — clean shutdown
