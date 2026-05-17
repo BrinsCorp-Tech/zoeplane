@@ -29,6 +29,15 @@ export const WATCHER_ERROR = "watcher:error" as const;
 /** SSE event type name for AssetIndexHydratedEvent. */
 export const ASSET_INDEX_HYDRATED = "asset:index:hydrated" as const;
 
+/** SSE event type name for ValidationCompletedEvent. */
+export const VALIDATION_COMPLETED = "validation:completed" as const;
+
+/** SSE event type name for AssetValidationUpdatedEvent. */
+export const ASSET_VALIDATION_UPDATED = "asset:validation:updated" as const;
+
+/** SSE event type name for HookIndexCompletedEvent. */
+export const HOOK_INDEX_COMPLETED = "hook:index:completed" as const;
+
 // ============================================================
 // Event shapes
 // ============================================================
@@ -139,9 +148,72 @@ export interface AssetIndexHydratedEvent {
   elapsedMs: number;
 }
 
+/**
+ * Emitted once after `runValidationPipeline()` completes at sidecar startup.
+ * Carries parse-outcome totals so the UI can render validation badges in the
+ * Library sidebar (Epic 06). Also emitted in fallback mode (when gray-matter
+ * is unavailable) with `fallback: true`.
+ *
+ * Story 3.5 is the sole emitter. Consumed by Epic 06 Library views.
+ */
+export interface ValidationCompletedEvent {
+  type: typeof VALIDATION_COMPLETED;
+  /** Number of assets that parsed as fully valid (valid YAML front-matter + non-empty body). */
+  valid: number;
+  /** Number of assets with valid YAML but missing recommended fields or exceeding size cap. */
+  warnings: number;
+  /** Number of assets with malformed YAML, missing delimiters, or empty body. */
+  invalid: number;
+  /** Elapsed time in milliseconds from pipeline start to event emission. */
+  elapsedMs: number;
+  /**
+   * True when gray-matter could not be loaded and the pipeline fell back to
+   * treating all rows as `valid` with `front_matter_json=NULL`. Only the
+   * warning-derivation UI degrades in this case; the index remains usable.
+   */
+  fallback: boolean;
+}
+
+/**
+ * Emitted per-asset after a watcher-triggered revalidation completes.
+ * The Library card for this asset should refresh its validation badge.
+ *
+ * Story 3.5 is the sole emitter. Consumed by Epic 06 asset card rendering.
+ */
+export interface AssetValidationUpdatedEvent {
+  type: typeof ASSET_VALIDATION_UPDATED;
+  /** UUID of the updated asset row. */
+  assetId: string;
+  /** Absolute path to the asset file that was revalidated. */
+  sourcePath: string;
+  /** Asset kind. */
+  kind: string;
+  /** Updated validation status for the asset. */
+  validationStatus: "valid" | "warnings" | "invalid";
+}
+
+/**
+ * Emitted once after `runHookDiscovery()` completes at sidecar startup.
+ * Carries hook-discovery totals so the UI can populate any hook-count badges.
+ *
+ * Story 3.6 is the sole emitter. Consumed by Epic 09 hook-management views.
+ */
+export interface HookIndexCompletedEvent {
+  type: typeof HOOK_INDEX_COMPLETED;
+  /** Total number of hook rows upserted (new or updated) across all scopes. */
+  hooksDiscovered: number;
+  /** Number of project settings files scanned (user scope is always 1 if present). */
+  projectsScanned: number;
+  /** Elapsed time in milliseconds from discovery start to event emission. */
+  elapsedMs: number;
+}
+
 /** Union of all watcher event types for exhaustive switching in consumers. */
 export type WatcherEvent =
   | AssetIndexUpdatedEvent
   | WatcherStartedEvent
   | WatcherErrorEvent
-  | AssetIndexHydratedEvent;
+  | AssetIndexHydratedEvent
+  | ValidationCompletedEvent
+  | AssetValidationUpdatedEvent
+  | HookIndexCompletedEvent;

@@ -78,5 +78,3 @@ export function PrimaryWorkArea({
     </main>
   );
 }
-
-export default PrimaryWorkArea;

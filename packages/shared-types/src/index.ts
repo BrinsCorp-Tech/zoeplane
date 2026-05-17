@@ -128,6 +128,9 @@ export type {
   WatcherStartedEvent,
   WatcherErrorEvent,
   AssetIndexHydratedEvent,
+  ValidationCompletedEvent,
+  AssetValidationUpdatedEvent,
+  HookIndexCompletedEvent,
   WatcherEvent,
 } from "./watcher";
 export {
@@ -135,6 +138,9 @@ export {
   WATCHER_STARTED,
   WATCHER_ERROR,
   ASSET_INDEX_HYDRATED,
+  VALIDATION_COMPLETED,
+  ASSET_VALIDATION_UPDATED,
+  HOOK_INDEX_COMPLETED,
 } from "./watcher";
 
 // ============================================================

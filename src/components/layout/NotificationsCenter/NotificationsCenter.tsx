@@ -444,5 +444,3 @@ export function NotificationsCenter({
     </>
   );
 }
-
-export default NotificationsCenter;

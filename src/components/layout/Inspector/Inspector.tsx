@@ -161,5 +161,3 @@ export function Inspector({
     </div>
   );
 }
-
-export default Inspector;

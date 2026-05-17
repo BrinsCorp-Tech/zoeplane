@@ -172,5 +172,3 @@ export function CollapsiblePane({
     </>
   );
 }
-
-export default CollapsiblePane;

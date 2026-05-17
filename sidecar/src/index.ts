@@ -35,6 +35,16 @@ import {
 } from "./indexer/watcher";
 import { runColdLaunchScan, subscribeToScannerEvents } from "./indexer/scanner";
 import { runShadowRecomputeAll, recomputeShadows } from "./indexer/resolver";
+import {
+  runValidationPipeline,
+  revalidateAsset,
+  subscribeToValidatorEvents,
+} from "./indexer/validator";
+import {
+  runHookDiscovery,
+  reindexHooksForPath,
+  subscribeToHookDiscoveryEvents,
+} from "./indexer/hook-discovery";
 import { pathToAssetIdentifier } from "./indexer/naming";
 import { type WatcherEvent, WATCHER_ASSET_UPDATED } from "@zoeplane/shared-types";
 
@@ -155,6 +165,8 @@ const server = Bun.serve({
     if (url.pathname === "/events" && req.method === "GET") {
       let unsubscribeWatcher: (() => void) | null = null;
       let unsubscribeScanner: (() => void) | null = null;
+      let unsubscribeValidator: (() => void) | null = null;
+      let unsubscribeHookDiscovery: (() => void) | null = null;
 
       const stream = new ReadableStream<Uint8Array>({
         start(controller) {
@@ -173,9 +185,13 @@ const server = Bun.serve({
             }
           };
 
-          // Subscribe to both watcher events and scanner events (AssetIndexHydratedEvent).
+          // Subscribe to watcher events, scanner events, validator events, and hook-discovery events.
           unsubscribeWatcher = subscribeToWatcherEvents(sendEvent);
           unsubscribeScanner = subscribeToScannerEvents(sendEvent);
+          // Story 3.5: ValidationCompletedEvent + AssetValidationUpdatedEvent
+          unsubscribeValidator = subscribeToValidatorEvents(sendEvent);
+          // Story 3.6: HookIndexCompletedEvent
+          unsubscribeHookDiscovery = subscribeToHookDiscoveryEvents(sendEvent);
         },
         cancel() {
           if (unsubscribeWatcher !== null) {
@@ -185,6 +201,14 @@ const server = Bun.serve({
           if (unsubscribeScanner !== null) {
             unsubscribeScanner();
             unsubscribeScanner = null;
+          }
+          if (unsubscribeValidator !== null) {
+            unsubscribeValidator();
+            unsubscribeValidator = null;
+          }
+          if (unsubscribeHookDiscovery !== null) {
+            unsubscribeHookDiscovery();
+            unsubscribeHookDiscovery = null;
           }
         },
       });
@@ -278,7 +302,7 @@ log("INFO", "ZoePlane sidecar HTTP server ready", { hostname: "127.0.0.1", port:
 // ---------------------------------------------------------------------------
 
 void runColdLaunchScan(db)
-  .then((totals) => {
+  .then(async (totals) => {
     log("INFO", "ZoePlane sidecar cold-launch scan complete — running shadow recompute", {
       totals,
     });
@@ -289,7 +313,25 @@ void runColdLaunchScan(db)
     // reflects the current overlay state before any real-time events fire.
     // ---------------------------------------------------------------------------
     runShadowRecomputeAll(db);
-    log("INFO", "ZoePlane sidecar shadow recompute complete — starting FS watcher");
+    log("INFO", "ZoePlane sidecar shadow recompute complete — starting validation pipeline");
+    // ---------------------------------------------------------------------------
+    // Validation pipeline (Epic 03, Story 3.5)
+    // Re-stamps validation_status and front_matter_json for every asset row.
+    // Runs after runColdLaunchScan() so all INSERT OR IGNORE rows are committed.
+    // Runs after runShadowRecomputeAll() (touches different columns; order is
+    // acceptable either way — shadow and validation are independent columns).
+    // ---------------------------------------------------------------------------
+    await runValidationPipeline(db);
+    log("INFO", "ZoePlane sidecar validation pipeline complete — starting hook discovery");
+    // ---------------------------------------------------------------------------
+    // Hook discovery (Epic 03, Story 3.6)
+    // Upserts all hooks from ~/.claude/settings.json and every tracked project's
+    // settings.json / settings.local.json into hook_index. Runs after the
+    // validation pipeline so the asset index is fully current before hooks are
+    // indexed. Emits HookIndexCompletedEvent when done.
+    // ---------------------------------------------------------------------------
+    await runHookDiscovery(db);
+    log("INFO", "ZoePlane sidecar hook discovery complete — starting FS watcher");
     // ---------------------------------------------------------------------------
     // FS Watcher startup (Epic 03, Story 3.2)
     // Start the global watcher after the cold-launch scan so that
@@ -333,7 +375,49 @@ subscribeToWatcherEvents((event: WatcherEvent) => {
   // TypeScript now knows event is AssetIndexUpdatedEvent via the type guard above.
   const { path: assetPath, projectRoot, eventKind } = event;
 
-  // Only process project-scoped events (projectRoot is non-null for project .claude/ trees).
+  // ---------------------------------------------------------------------------
+  // Story 3.6: Per-event hook reindex (settings.json + settings.local.json).
+  // Fires for created, modified, and removed events — all three can alter the
+  // hook set. The reindexHooksForPath function handles missing files gracefully
+  // (soft-deletes the scope's existing rows).
+  // ---------------------------------------------------------------------------
+  if (assetPath.endsWith("settings.json") || assetPath.endsWith("settings.local.json")) {
+    reindexHooksForPath(db, assetPath).catch((err: unknown) => {
+      log("ERROR", "Sidecar: per-event hook reindex failed", {
+        assetPath,
+        error: String(err),
+      });
+    });
+  }
+
+  // ---------------------------------------------------------------------------
+  // Story 3.5: Per-event revalidation (created + modified only).
+  // Removed events are a NO-OP — the row is already gone or about to be removed
+  // by a separate code path. Attempting to stat/read a deleted file would just
+  // produce a spurious "invalid" stamp on a row that may no longer exist.
+  // ---------------------------------------------------------------------------
+  if (eventKind === "removed") {
+    log("INFO", "Sidecar: watcher removed event — skipping revalidation (no-op)", { assetPath });
+  } else if (eventKind === "created" || eventKind === "modified") {
+    // Derive kind from the path for per-event revalidation.
+    const claudeRootForValidation =
+      projectRoot !== null ? join(projectRoot, ".claude") : join(process.env.HOME ?? "", ".claude");
+    const identifierForValidation = pathToAssetIdentifier(assetPath, claudeRootForValidation);
+
+    if (identifierForValidation !== null) {
+      revalidateAsset(db, assetPath, identifierForValidation.kind).catch((err: unknown) => {
+        log("ERROR", "Sidecar: per-event revalidation failed", {
+          assetPath,
+          kind: identifierForValidation.kind,
+          error: String(err),
+        });
+      });
+    }
+    // (renamed events are reserved/future — no revalidation action needed for now)
+  }
+
+  // Only process project-scoped events for shadow recompute
+  // (projectRoot is non-null for project .claude/ trees).
   if (projectRoot === null) {
     return;
   }

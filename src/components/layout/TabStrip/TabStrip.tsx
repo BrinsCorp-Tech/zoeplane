@@ -228,5 +228,3 @@ export function TabStrip({ tabs: tabsProp, className }: TabStripProps): React.Re
     </div>
   );
 }
-
-export default TabStrip;

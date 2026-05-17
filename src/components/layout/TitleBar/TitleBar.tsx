@@ -142,5 +142,3 @@ export function TitleBar({
     </header>
   );
 }
-
-export default TitleBar;
