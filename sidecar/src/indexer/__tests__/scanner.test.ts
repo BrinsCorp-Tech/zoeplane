@@ -141,19 +141,26 @@ function mkNestedCommand(
 // ---------------------------------------------------------------------------
 
 let tmpRoot: string;
-/** Fake home dir — overrides HOME so homedir() returns tmpRoot. */
+/** Fake home dir — overrides HOME (POSIX) and USERPROFILE (Windows) so
+ *  os.homedir() returns tmpRoot on every host. Node's os.homedir() reads
+ *  USERPROFILE on Windows (not HOME), so POSIX-only override silently fails
+ *  the scanner walk on Windows CI — it ends up scanning the real user's
+ *  ~/.claude (which doesn't exist on the CI runner) and returns zero rows. */
 let claudeDir: string;
 const originalHome = process.env.HOME;
+const originalUserProfile = process.env.USERPROFILE;
 
 beforeEach(() => {
   tmpRoot = mkdtempSync(join(tmpdir(), "zp-scanner-test-"));
   claudeDir = join(tmpRoot, ".claude");
   mkdirSync(claudeDir, { recursive: true });
   process.env.HOME = tmpRoot;
+  process.env.USERPROFILE = tmpRoot;
 });
 
 afterEach(() => {
   process.env.HOME = originalHome;
+  process.env.USERPROFILE = originalUserProfile;
   rmSync(tmpRoot, { recursive: true, force: true });
 });
 
