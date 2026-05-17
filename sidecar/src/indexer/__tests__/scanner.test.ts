@@ -544,7 +544,15 @@ describe("runColdLaunchScan — depth guard for direct-md (commands)", () => {
 // HIGH-2b: direct-md permission-denied — WARN + skip, no panic
 // ---------------------------------------------------------------------------
 
-describe("runColdLaunchScan — permission-denied on direct-md file", () => {
+// chmod(0o000) is a POSIX mechanism — Windows file ACLs ignore the Unix-style
+// read bit and Node's chmod on Windows only honors the write bit (for backwards
+// compat with libuv). The scanner's WARN-and-continue behavior on EACCES is
+// validated on macOS + Ubuntu CI; replicating an unreadable file on Windows
+// would require icacls / Win32-specific ACL API which adds complexity beyond
+// the value of testing this specific path twice. Skip on Windows.
+describe.skipIf(process.platform === "win32")(
+  "runColdLaunchScan — permission-denied on direct-md file",
+  () => {
   it("skips an unreadable agent .md file and produces zero rows for it", async () => {
     // Create a valid agent file alongside a restricted one.
     mkAgent(claudeDir, "readable-agent");
