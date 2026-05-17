@@ -269,5 +269,3 @@ if (typeof document !== "undefined") {
     document.head.appendChild(el);
   }
 }
-
-export default CommandPalette;

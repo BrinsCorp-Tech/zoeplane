@@ -14,7 +14,8 @@
   },
   "dependencies": {
     "@zoeplane/shared-types": "workspace:*",
-    "chokidar": "5.0.0"
+    "chokidar": "5.0.0",
+    "gray-matter": "^4"
   },
   "devDependencies": {
     "typescript": "^5.5.0",
