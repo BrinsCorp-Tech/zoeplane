@@ -214,3 +214,51 @@ describe("pathToAssetIdentifier — project-scoped root", () => {
     expect(result).toBeNull();
   });
 });
+
+// ---------------------------------------------------------------------------
+// Cross-platform separator handling (regression guard for Windows CI)
+// ---------------------------------------------------------------------------
+//
+// On Windows, scanner.ts produces paths via node:path.resolve() which uses
+// "\\" separators. naming.test.ts (above) uses POSIX-literal "/" paths. The
+// helper must accept BOTH styles regardless of host platform. These tests
+// pass on Mac/Linux AND Windows by constructing paths with literal "\\".
+//
+// Regression for PR #31 hotfixes f796548 + the follow-up that introduced
+// toPosix() normalization at entry.
+
+describe("pathToAssetIdentifier — Windows-style separator inputs", () => {
+  it("extracts skill name from a Windows-style absolute path", () => {
+    const result = pathToAssetIdentifier(
+      "C:\\Users\\runner\\.claude\\skills\\my-skill\\SKILL.md",
+      "C:\\Users\\runner\\.claude",
+    );
+    expect(result).toEqual({ kind: "skill", name: "my-skill" });
+  });
+
+  it("extracts agent name from a Windows-style flat .md path", () => {
+    const result = pathToAssetIdentifier(
+      "D:\\repo\\test-fixture\\.claude\\agents\\architect.md",
+      "D:\\repo\\test-fixture\\.claude",
+    );
+    expect(result).toEqual({ kind: "agent", name: "architect" });
+  });
+
+  it("extracts nested command name with POSIX-style output regardless of input separator", () => {
+    // Output name MUST use "/" (canonical cross-platform identifier) even
+    // when input uses "\\". This keeps assets.name values stable for sync.
+    const result = pathToAssetIdentifier(
+      "C:\\Users\\u\\.claude\\commands\\consider\\first-principles.md",
+      "C:\\Users\\u\\.claude",
+    );
+    expect(result).toEqual({ kind: "command", name: "consider/first-principles" });
+  });
+
+  it("enforces prefix-collision guard against Windows-style siblings", () => {
+    const result = pathToAssetIdentifier(
+      "C:\\Users\\u\\.claude\\skills2\\my-skill\\SKILL.md",
+      "C:\\Users\\u\\.claude",
+    );
+    expect(result).toBeNull();
+  });
+});

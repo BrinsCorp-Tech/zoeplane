@@ -19,7 +19,21 @@
 //   team      → <root>/teams/<name>/TEAM.md         → name = <name>
 //   workflow  → <root>/workflows/<name>/WORKFLOW.md → name = <name>
 
-import { relative, extname, sep, join } from "node:path";
+import { extname, join } from "node:path";
+
+/**
+ * Normalize a path string to POSIX "/" separators. Always replaces "\\" with
+ * "/" regardless of host platform — backslash is not a meaningful path
+ * separator in practice for the file kinds this helper indexes (skills,
+ * agents, commands, teams, workflows under `~/.claude/`), and always-replace
+ * makes the helper truly platform-agnostic. The helper accepts inputs from:
+ *   1. Production code: paths from node:path (platform-native on Windows).
+ *   2. Test fixtures and cross-platform sync code: POSIX-literal paths.
+ *   3. Windows-style literals tested on POSIX hosts (regression tests).
+ */
+function toPosix(p: string): string {
+  return p.replaceAll("\\", "/");
+}
 
 // ---------------------------------------------------------------------------
 // Supported asset kinds (mirrors scanner.ts — keep in sync)
@@ -76,28 +90,32 @@ export function pathToAssetIdentifier(
   absolutePath: string,
   claudeRoot: string,
 ): AssetIdentifier | null {
+  // Normalize both inputs to POSIX so a single string-comparison code path
+  // works regardless of caller style (platform-native via node:path on Windows
+  // vs POSIX-literal in test fixtures).
+  const normPath = toPosix(absolutePath);
+  const normRoot = toPosix(claudeRoot);
+
   for (const [kindStr, dirName] of Object.entries(KIND_DIR_NAME)) {
     const kind = kindStr as AssetKind;
-    // Filesystem path: use platform-native separator (sep === "\\" on Windows,
-    // "/" on POSIX). The output `name` below is always POSIX-style ("/") so
-    // asset.name values are stable across platforms.
-    const kindRoot = join(claudeRoot, dirName);
+    const kindRoot = `${normRoot}/${dirName}`;
 
-    // Normalise: ensure the path starts with the kind root + separator so we
-    // don't accidentally match a prefix (e.g., `skills2/` treated as `skills/`).
-    if (!absolutePath.startsWith(kindRoot + sep)) {
+    // Ensure the path starts with the kind root + "/" so we don't accidentally
+    // match a prefix (e.g., `skills2/` treated as `skills/`).
+    if (!normPath.startsWith(kindRoot + "/")) {
       continue;
     }
+
+    // Compute the path relative to the kind root. Since startsWith just passed,
+    // simple slicing is correctness-equivalent to posix.relative() here.
+    const relFromKindRoot = normPath.slice(kindRoot.length + 1);
 
     const canonicalFile = SUBDIR_CANONICAL_FILE[kind];
 
     if (canonicalFile !== undefined) {
       // subdir-canonical layout: <kindRoot>/<assetName>/<canonicalFile>
       // Only match the canonical file; ignore other files inside the subdir.
-      const relFromKindRoot = relative(kindRoot, absolutePath);
-      // relFromKindRoot should be exactly "<assetName><sep><canonicalFile>"
-      // (relative() returns platform-native separators; split on sep accordingly)
-      const segments = relFromKindRoot.split(sep);
+      const segments = relFromKindRoot.split("/");
       if (segments.length !== 2) {
         return null; // Too deep or at root — not a canonical asset file.
       }
@@ -108,8 +126,7 @@ export function pathToAssetIdentifier(
       return { kind, name: assetName };
     } else {
       // direct-md layout: <kindRoot>/<name>.md  or  <kindRoot>/<sub>/<name>.md
-      const relFromKindRoot = relative(kindRoot, absolutePath);
-      const segments = relFromKindRoot.split(sep);
+      const segments = relFromKindRoot.split("/");
 
       if (segments.length === 1) {
         // Flat: agents/architect.md → name = "architect"
