@@ -127,9 +127,15 @@ export type {
   AssetIndexUpdatedEvent,
   WatcherStartedEvent,
   WatcherErrorEvent,
+  AssetIndexHydratedEvent,
   WatcherEvent,
 } from "./watcher";
-export { WATCHER_ASSET_UPDATED, WATCHER_STARTED, WATCHER_ERROR } from "./watcher";
+export {
+  WATCHER_ASSET_UPDATED,
+  WATCHER_STARTED,
+  WATCHER_ERROR,
+  ASSET_INDEX_HYDRATED,
+} from "./watcher";
 
 // ============================================================
 // User preferences
