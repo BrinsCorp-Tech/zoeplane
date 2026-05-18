@@ -25,7 +25,7 @@ use std::path::PathBuf;
 use serde::{Deserialize, Serialize};
 use tauri::command;
 use tauri_plugin_fs::FsExt;
-use tracing::{error, info};
+use tracing::{error, info, warn};
 
 /// Structured log payload emitted on every FS allowlist violation (FB-016).
 /// Written at ERROR level so it surfaces in default log configurations.
@@ -45,7 +45,14 @@ fn now_ms() -> u128 {
         .as_millis()
 }
 
-/// Logs a structured allowlist-violation entry at ERROR level (FB-016).
+/// Logs a structured allowlist-violation entry at WARN level (FB-016).
+///
+/// Emits a single structured `tracing::warn!` event on the `fs-allowlist`
+/// target. Structured fields (path, caller, operation, timestamp_ms) are
+/// available to any tracing subscriber — including JSON-format subscribers —
+/// via field capture. The previous dual-emit pattern (fs-allowlist + a
+/// separate fs-allowlist-json error!) is replaced by this single event
+/// (Story 3.7 / Active Constraint 13 / Sprint 1 MED-1 pass-2 resolution).
 ///
 /// Parameters:
 /// - `path`: The filesystem path that was denied.
@@ -59,9 +66,9 @@ fn log_violation(path: &str, caller: &str, operation: &str) {
         timestamp_ms: now_ms(),
     };
 
-    // Emit as structured fields so tracing subscribers can capture them.
-    // Also serialize to JSON so the raw log line is machine-parseable.
-    error!(
+    // Single structured emit — subscribers that want JSON read the fields
+    // directly from the tracing event record; no second emit needed.
+    warn!(
         target: "fs-allowlist",
         path = %log.path,
         caller = %log.caller,
@@ -69,12 +76,6 @@ fn log_violation(path: &str, caller: &str, operation: &str) {
         timestamp_ms = log.timestamp_ms,
         "FS allowlist violation — operation denied"
     );
-
-    // Belt-and-suspenders: also emit as a JSON-serialized line on stderr so
-    // log aggregators that only capture raw stderr lines still see it.
-    if let Ok(json) = serde_json::to_string(&log) {
-        error!(target: "fs-allowlist-json", "{}", json);
-    }
 }
 
 // ---------------------------------------------------------------------------
@@ -108,7 +109,7 @@ fn log_violation(path: &str, caller: &str, operation: &str) {
 /// until it finds an existing ancestor and checks that instead. This
 /// allows "does this file exist yet?" probes to succeed for paths inside
 /// in-scope directories, while still denying genuinely out-of-scope paths.
-fn is_allowed_for_probe(scope: &tauri::fs::Scope, path: &std::path::Path) -> bool {
+pub(crate) fn is_allowed_for_probe(scope: &tauri::fs::Scope, path: &std::path::Path) -> bool {
     // Fast path: path itself is allowed (works for existing in-scope paths).
     if scope.is_allowed(path) {
         return true;

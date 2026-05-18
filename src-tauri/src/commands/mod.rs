@@ -4,3 +4,4 @@
 // from here in the `invoke_handler!` macro in lib.rs.
 
 pub mod fs;
+pub mod project;

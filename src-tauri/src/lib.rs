@@ -149,6 +149,10 @@ pub fn run() {
             commands::fs::fs_write_file,
             commands::fs::fs_read_dir,
             commands::fs::fs_exists,
+            // Story 3.7: Project management (FR-040 / FB-015).
+            commands::project::switch_project,
+            commands::project::add_project,
+            commands::project::remove_project,
         ])
         .setup(|app| {
             info!("App setup — spawning sidecar");

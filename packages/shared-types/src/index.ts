@@ -120,6 +120,44 @@ export type RunEventType =
 export type { ProjectContext, ProjectOpenEvent, ProjectCloseEvent } from "./project";
 
 // ============================================================
+// Project-switch IPC events (Story 3.7 — FR-040)
+// ============================================================
+
+/**
+ * Emitted by the Tauri `switch_project` command when a project switch
+ * completes successfully. The UI uses this to render the new project name
+ * and dismiss any loading state.
+ */
+export interface ProjectSwitchCompletedEvent {
+  type: "project:switch:completed";
+  projectId: string;
+  previousProjectId: string | null;
+  elapsedMs: number;
+}
+
+/**
+ * Emitted by `switch_project` when the target project's `.claude/` directory
+ * has been externally deleted since the project was added. The switch
+ * completes with an empty rescan; the project remains in the Switcher but
+ * its asset count is zero.
+ */
+export interface ProjectClaudeMissingWarning {
+  type: "project:claude:missing";
+  projectId: string;
+}
+
+/**
+ * Emitted by `switch_project` when the Tauri runtime FS scope extension
+ * fails (e.g., path resolution error). The previous active project remains
+ * active; the UI should surface an error toast.
+ */
+export interface ProjectSwitchFailedEvent {
+  type: "project:switch:failed";
+  projectId: string;
+  reason: string;
+}
+
+// ============================================================
 // FS Watcher events (Epic 03, Story 3.2)
 // ============================================================
 
