@@ -603,3 +603,134 @@ export async function runColdLaunchScan(db: Database): Promise<ScanTotals> {
 
   return totals;
 }
+
+// ---------------------------------------------------------------------------
+// Public API — runProjectScan (Story 3.7 / FR-040)
+// ---------------------------------------------------------------------------
+
+/**
+ * Run a targeted asset scan scoped to a single project root.
+ *
+ * Called by the sidecar's POST /indexer/scan/project endpoint (triggered from
+ * the Tauri `switch_project` command). Uses the same enumeration and INSERT
+ * logic as `runColdLaunchScan` but restricts enumeration to one project's
+ * .claude/ subtrees and uses `INSERT OR IGNORE` for idempotency.
+ *
+ * Note: CR-6 (`globalKindCounts` refactor) is Batch 2 scope — this function
+ * duplicates some counting logic intentionally. Do NOT refactor the two scan
+ * functions into a shared helper until CR-6 is scheduled.
+ *
+ * @param db          Open Database instance.
+ * @param projectRoot Absolute path to the project root (e.g., "/Users/zeke/MyProject").
+ *                    Must be normalised to POSIX separators by the caller.
+ * @returns           Count of assets inserted/skipped.
+ */
+export async function runProjectScan(
+  db: Database,
+  projectRoot: string,
+): Promise<{ projectId: string | null; insertedCount: number; elapsedMs: number }> {
+  const startMs = Date.now();
+
+  log("INFO", "Scanner: project scan starting", { projectRoot });
+
+  // Look up the project_id for this root.
+  interface ProjectIdRow {
+    id: string;
+  }
+  const projectRow = db
+    .query<
+      ProjectIdRow,
+      [string]
+    >("SELECT id FROM projects WHERE path = ? AND deleted_at IS NULL LIMIT 1")
+    .get(projectRoot);
+
+  if (projectRow === null) {
+    log("WARN", "Scanner: runProjectScan — projectRoot not found in projects table, scan skipped", {
+      projectRoot,
+    });
+    return { projectId: null, insertedCount: 0, elapsedMs: Date.now() - startMs };
+  }
+
+  const projectId = projectRow.id;
+  const projectClaudeDir = join(projectRoot, ".claude");
+
+  // Enumerate all kind roots for this project concurrently.
+  const kindResults = await Promise.all(
+    KIND_DEFS.map((def) => enumerateKindRoot(join(projectClaudeDir, def.dirName), def)),
+  );
+  const files = kindResults.flat();
+
+  if (files.length === 0) {
+    log("INFO", "Scanner: project scan found 0 asset files", { projectRoot, projectId });
+    return { projectId, insertedCount: 0, elapsedMs: Date.now() - startMs };
+  }
+
+  const now = Date.now();
+  const insertRows: AssetRow[] = [];
+
+  await Promise.all(
+    files.map(async (file) => {
+      const meta = await readFileMetadata(file.sourcePath);
+      if (meta === null) return; // skip on read failure (already logged in readFileMetadata)
+      insertRows.push({
+        id: crypto.randomUUID(),
+        workspace_id: DEFAULT_WORKSPACE_ID,
+        author_id: DEFAULT_AUTHOR_ID,
+        visibility: DEFAULT_VISIBILITY,
+        created_at: now,
+        updated_at: now,
+        deleted_at: null,
+        kind: file.kind,
+        name: file.name,
+        scope: "project",
+        project_id: projectId,
+        source_path: file.sourcePath,
+        validation_status: "valid",
+        shadowed_by_project_id: null,
+        last_modified_by: "external",
+        last_modified_at: meta.mtimeMs,
+        front_matter_json: null,
+        body_excerpt: meta.bodyExcerptText,
+      });
+    }),
+  );
+
+  const stmt = db.prepare(INSERT_SQL);
+  const insertMany = db.transaction((rows: AssetRow[]) => {
+    for (const row of rows) {
+      stmt.run({
+        $id: row.id,
+        $workspace_id: row.workspace_id,
+        $author_id: row.author_id,
+        $visibility: row.visibility,
+        $created_at: row.created_at,
+        $updated_at: row.updated_at,
+        $deleted_at: row.deleted_at,
+        $kind: row.kind,
+        $name: row.name,
+        $scope: row.scope,
+        $project_id: row.project_id,
+        $source_path: row.source_path,
+        $validation_status: row.validation_status,
+        $shadowed_by_project_id: row.shadowed_by_project_id,
+        $last_modified_by: row.last_modified_by,
+        $last_modified_at: row.last_modified_at,
+        $front_matter_json: row.front_matter_json,
+        $body_excerpt: row.body_excerpt,
+      });
+    }
+  });
+
+  insertMany(insertRows);
+
+  const elapsedMs = Date.now() - startMs;
+
+  log("INFO", "Scanner: project scan complete", {
+    projectRoot,
+    projectId,
+    insertedCount: insertRows.length,
+    elapsedMs,
+  });
+
+  return { projectId, insertedCount: insertRows.length, elapsedMs };
+}
