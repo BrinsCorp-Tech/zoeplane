@@ -35,18 +35,15 @@ import {
 } from "./indexer/watcher";
 import { runColdLaunchScan, runProjectScan, subscribeToScannerEvents } from "./indexer/scanner";
 import { runShadowRecomputeAll, recomputeShadows } from "./indexer/resolver";
-import {
-  runValidationPipeline,
-  revalidateAsset,
-  subscribeToValidatorEvents,
-} from "./indexer/validator";
+import { runValidationPipeline, subscribeToValidatorEvents } from "./indexer/validator";
 import {
   runHookDiscovery,
   reindexHooksForPath,
   subscribeToHookDiscoveryEvents,
 } from "./indexer/hook-discovery";
-import { pathToAssetIdentifier } from "./indexer/naming";
-import { type WatcherEvent, WATCHER_ASSET_UPDATED } from "@zoeplane/shared-types";
+import { initEventRouter, subscribeToEventRouterEvents } from "./indexer/event-router";
+import { detectEditor } from "./editor-detection";
+import { type WatcherEvent } from "@zoeplane/shared-types";
 
 // ---------------------------------------------------------------------------
 // CLI argument parsing — DB path (required, supplied by Tauri shell at spawn)
@@ -167,6 +164,7 @@ const server = Bun.serve({
       let unsubscribeScanner: (() => void) | null = null;
       let unsubscribeValidator: (() => void) | null = null;
       let unsubscribeHookDiscovery: (() => void) | null = null;
+      let unsubscribeEventRouter: (() => void) | null = null;
 
       const stream = new ReadableStream<Uint8Array>({
         start(controller) {
@@ -185,13 +183,17 @@ const server = Bun.serve({
             }
           };
 
-          // Subscribe to watcher events, scanner events, validator events, and hook-discovery events.
+          // Story 3.2: raw watcher events (AssetIndexUpdatedEvent, WatcherStartedEvent,
+          // WatcherErrorEvent) — direct subscription so they reach the client even though
+          // the event-router does not relay them (it only emits derived events).
           unsubscribeWatcher = subscribeToWatcherEvents(sendEvent);
           unsubscribeScanner = subscribeToScannerEvents(sendEvent);
           // Story 3.5: ValidationCompletedEvent + AssetValidationUpdatedEvent
           unsubscribeValidator = subscribeToValidatorEvents(sendEvent);
           // Story 3.6: HookIndexCompletedEvent
           unsubscribeHookDiscovery = subscribeToHookDiscoveryEvents(sendEvent);
+          // Story 3.8: LibraryRefreshEvent + AssetExternallyModifiedWhileOpenEvent
+          unsubscribeEventRouter = subscribeToEventRouterEvents(sendEvent);
         },
         cancel() {
           if (unsubscribeWatcher !== null) {
@@ -209,6 +211,10 @@ const server = Bun.serve({
           if (unsubscribeHookDiscovery !== null) {
             unsubscribeHookDiscovery();
             unsubscribeHookDiscovery = null;
+          }
+          if (unsubscribeEventRouter !== null) {
+            unsubscribeEventRouter();
+            unsubscribeEventRouter = null;
           }
         },
       });
@@ -614,6 +620,65 @@ const server = Bun.serve({
       });
     }
 
+    // ------------------------------------------------------------------
+    // POST /editor/open — register a path as currently open for editing
+    //
+    // Body: { "path": "/absolute/path/to/asset.md" }
+    //
+    // Adds the path to the editorOpenSet. While registered, watcher events
+    // for this path emit AssetExternallyModifiedWhileOpenEvent instead of
+    // silently refreshing (FR-006 boundary / AC #5, #6, #7).
+    //
+    // Returns 400 with { code: "path_not_watched", path } if the path is not
+    // under any watched root (AC #7).
+    // ------------------------------------------------------------------
+    if (url.pathname === "/editor/open" && req.method === "POST") {
+      return req.json().then((body: unknown) => {
+        if (
+          typeof body !== "object" ||
+          body === null ||
+          typeof (body as Record<string, unknown>).path !== "string"
+        ) {
+          return Response.json(
+            { error: "Bad Request", message: "Body must be { path: string }" },
+            { status: 400 },
+          );
+        }
+        const editorPath = (body as { path: string }).path;
+        const err = eventRouter.registerOpenEditor(editorPath);
+        if (err !== null) {
+          return Response.json({ error: "Bad Request", ...err }, { status: 400 });
+        }
+        return Response.json({ ok: true, path: editorPath }, { status: 200 });
+      });
+    }
+
+    // ------------------------------------------------------------------
+    // POST /editor/close — unregister a path from the editorOpenSet
+    //
+    // Body: { "path": "/absolute/path/to/asset.md" }
+    //
+    // Removes the path from the editorOpenSet (no-op if not present).
+    // Subsequent watcher events for this path resume the silent-reindex path.
+    // ------------------------------------------------------------------
+    if (url.pathname === "/editor/close" && req.method === "POST") {
+      return req.json().then((body: unknown) => {
+        if (
+          typeof body !== "object" ||
+          body === null ||
+          typeof (body as Record<string, unknown>).path !== "string"
+        ) {
+          return Response.json(
+            { error: "Bad Request", message: "Body must be { path: string }" },
+            { status: 400 },
+          );
+        }
+        const editorPath = (body as { path: string }).path;
+        eventRouter.unregisterOpenEditor(editorPath);
+        return Response.json({ ok: true, path: editorPath }, { status: 200 });
+      });
+    }
+
     // All other routes: 404. Future epics will extend this routing.
     return new Response("Not Found", { status: 404 });
   },
@@ -708,7 +773,49 @@ void runColdLaunchScan(db)
     // indexed. Emits HookIndexCompletedEvent when done.
     // ---------------------------------------------------------------------------
     await runHookDiscovery(db);
-    log("INFO", "ZoePlane sidecar hook discovery complete — starting FS watcher");
+    log("INFO", "ZoePlane sidecar hook discovery complete — running editor detection");
+    // ---------------------------------------------------------------------------
+    // Editor detection (Epic 03, Story 3.9 — FR-035)
+    //
+    // Runs ONCE per launch when user_preferences.detected_editor is NULL.
+    // Probes `which code` → `which cursor` → `which zed` (or `where` on Windows).
+    // Persists the first found editor as { name, cli } JSON.
+    // If none found, persists { name: "system", cli: null } so the fallback
+    // chain terminates predictably on subsequent launches (AC #4).
+    // ---------------------------------------------------------------------------
+    interface PrefRow {
+      value: string;
+    }
+    const existingEditorPref = db
+      .query<PrefRow, [string]>("SELECT value FROM user_preferences WHERE key = ? LIMIT 1")
+      .get("detected_editor");
+    if (existingEditorPref === null) {
+      const detected = await detectEditor();
+      const editorValue =
+        detected !== null
+          ? JSON.stringify({ name: detected.name, cli: detected.cli })
+          : JSON.stringify({ name: "system", cli: null });
+      const now = Date.now();
+      db.query(
+        "INSERT INTO user_preferences (key, value, updated_at) VALUES (?, ?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at",
+      ).run("detected_editor", editorValue, now);
+      if (detected !== null) {
+        log("INFO", "ZoePlane sidecar editor detected and persisted", {
+          name: detected.name,
+          cli: detected.cli,
+        });
+      } else {
+        log(
+          "INFO",
+          "ZoePlane sidecar no supported editor detected on PATH — persisting system fallback",
+        );
+      }
+    } else {
+      log("INFO", "ZoePlane sidecar editor preference already set — skipping detection", {
+        value: existingEditorPref.value,
+      });
+    }
+    log("INFO", "ZoePlane sidecar editor detection complete — starting FS watcher");
     // ---------------------------------------------------------------------------
     // FS Watcher startup (Epic 03, Story 3.2)
     // Start the global watcher after the cold-launch scan so that
@@ -728,124 +835,22 @@ void runColdLaunchScan(db)
   });
 
 // ---------------------------------------------------------------------------
-// Per-event shadow recompute (Epic 03, Story 3.4)
+// Event router (Epic 03, Story 3.8 — FR-007)
 //
-// Subscribes to AssetIndexUpdatedEvent from the watcher. On each event that
-// touches an asset file under a project's .claude/ tree, we derive the
-// (kind, name) pair via the shared naming helper and call a narrow
-// recomputeShadows() for that pair only — keeping per-event work O(1) rather
-// than O(project assets).
+// Replaces the former inline subscribeToWatcherEvents block (Stories 3.4/3.5).
+// initEventRouter subscribes to watcher events and dispatches:
+//   - created  → INSERT + revalidate + shadow recompute + LibraryRefreshEvent
+//   - modified → revalidate + shadow recompute + LibraryRefreshEvent
+//               (or AssetExternallyModifiedWhileOpenEvent when path is open)
+//   - removed  → tombstone + shadow recompute + LibraryRefreshEvent removed
+//   - settings.json → hook reindex (delegated via deps.reindexHooksForPath)
 //
-// Events under global roots (projectRoot=null) do NOT trigger a narrow
-// recompute here: global changes affect all projects' shadow states, so Story
-// 3.8 (silent reindex) will handle the broader invalidation. For Sprint 3 v1
-// the per-event path covers the project-scoped overlay case only.
+// The eventRouter handle exposes registerOpenEditor / unregisterOpenEditor for
+// the /editor/open and /editor/close HTTP endpoints below.
 // ---------------------------------------------------------------------------
 
-subscribeToWatcherEvents((event: WatcherEvent) => {
-  // LOW-1: use the discriminated-union type narrowing (event.type literal)
-  // instead of an unsafe `as AssetIndexUpdatedEvent` cast.
-  if (event.type !== WATCHER_ASSET_UPDATED) {
-    return;
-  }
-
-  // TypeScript now knows event is AssetIndexUpdatedEvent via the type guard above.
-  const { path: assetPath, projectRoot, eventKind } = event;
-
-  // ---------------------------------------------------------------------------
-  // Story 3.6: Per-event hook reindex (settings.json + settings.local.json).
-  // Fires for created, modified, and removed events — all three can alter the
-  // hook set. The reindexHooksForPath function handles missing files gracefully
-  // (soft-deletes the scope's existing rows).
-  // ---------------------------------------------------------------------------
-  if (assetPath.endsWith("settings.json") || assetPath.endsWith("settings.local.json")) {
-    reindexHooksForPath(db, assetPath).catch((err: unknown) => {
-      log("ERROR", "Sidecar: per-event hook reindex failed", {
-        assetPath,
-        error: String(err),
-      });
-    });
-  }
-
-  // ---------------------------------------------------------------------------
-  // Story 3.5: Per-event revalidation (created + modified only).
-  // Removed events are a NO-OP — the row is already gone or about to be removed
-  // by a separate code path. Attempting to stat/read a deleted file would just
-  // produce a spurious "invalid" stamp on a row that may no longer exist.
-  // ---------------------------------------------------------------------------
-  if (eventKind === "removed") {
-    log("INFO", "Sidecar: watcher removed event — skipping revalidation (no-op)", { assetPath });
-  } else if (eventKind === "created" || eventKind === "modified") {
-    // Derive kind from the path for per-event revalidation.
-    const claudeRootForValidation =
-      projectRoot !== null ? join(projectRoot, ".claude") : join(process.env.HOME ?? "", ".claude");
-    const identifierForValidation = pathToAssetIdentifier(assetPath, claudeRootForValidation);
-
-    if (identifierForValidation !== null) {
-      revalidateAsset(db, assetPath, identifierForValidation.kind).catch((err: unknown) => {
-        log("ERROR", "Sidecar: per-event revalidation failed", {
-          assetPath,
-          kind: identifierForValidation.kind,
-          error: String(err),
-        });
-      });
-    }
-    // (renamed events are reserved/future — no revalidation action needed for now)
-  }
-
-  // Only process project-scoped events for shadow recompute
-  // (projectRoot is non-null for project .claude/ trees).
-  if (projectRoot === null) {
-    return;
-  }
-
-  // Derive (kind, name) from the absolute path using the shared naming helper.
-  const claudeRoot = join(projectRoot, ".claude");
-  const identifier = pathToAssetIdentifier(assetPath, claudeRoot);
-
-  if (identifier === null) {
-    // Path is not a recognised asset file (e.g., intermediate directory, .DS_Store).
-    return;
-  }
-
-  // Look up the project_id for this projectRoot — projects.path is the FK.
-  interface ProjectIdRow {
-    id: string;
-  }
-  const projectRow = db
-    .query<
-      ProjectIdRow,
-      [string]
-    >("SELECT id FROM projects WHERE path = ? AND deleted_at IS NULL LIMIT 1")
-    .get(projectRoot);
-
-  if (projectRow === null) {
-    log("WARN", "Sidecar: AssetIndexUpdatedEvent projectRoot not found in projects table", {
-      projectRoot,
-      assetPath,
-    });
-    return;
-  }
-
-  log("INFO", "Sidecar: per-event shadow recompute triggered", {
-    projectId: projectRow.id,
-    kind: identifier.kind,
-    name: identifier.name,
-    eventKind,
-  });
-
-  // MEDIUM-3: wrap in try/catch so a per-event recompute failure is visible in
-  // logs but does not crash the subscriber loop or silence future events.
-  try {
-    recomputeShadows(db, projectRow.id, { kind: identifier.kind, name: identifier.name });
-  } catch (err) {
-    log("ERROR", "Sidecar: per-event shadow recompute failed", {
-      projectId: projectRow.id,
-      kind: identifier.kind,
-      name: identifier.name,
-      error: String(err),
-    });
-  }
+const eventRouter = initEventRouter(db, {
+  reindexHooksForPath,
 });
 
 // ---------------------------------------------------------------------------

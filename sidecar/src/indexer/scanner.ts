@@ -384,6 +384,131 @@ const INSERT_SQL = `
 `;
 
 // ---------------------------------------------------------------------------
+// Public API — insertAssetRow (single-file INSERT helper for event-router)
+// ---------------------------------------------------------------------------
+
+/**
+ * Insert a single asset row into the `assets` table.
+ *
+ * Uses `INSERT OR IGNORE` for idempotency — if a row already exists for the
+ * given `source_path` (e.g., the cold-launch scan already indexed it), this
+ * is a silent no-op. Callers that need UPDATE semantics should use the
+ * validation pipeline's `revalidateAsset` instead.
+ *
+ * Called by the event-router (Story 3.8) when an AssetIndexUpdatedEvent
+ * arrives with eventKind "created" for a path that has no existing assets row.
+ *
+ * @param db         Open bun:sqlite Database instance.
+ * @param sourcePath Absolute POSIX path to the asset file.
+ * @param scope      "global" | "project" | "local"
+ * @param projectId  UUID of the owning project, or null for global-scope assets.
+ * @returns          The UUID allocated for the new row, or null if the INSERT
+ *                   was a no-op (row already existed).
+ */
+export async function insertAssetRow(
+  db: Database,
+  sourcePath: string,
+  scope: "global" | "project" | "local",
+  projectId: string | null,
+): Promise<string | null> {
+  // Derive (kind, name) from the path using the shared naming helper.
+  // claudeRoot is the parent of the kind directory
+  //   global: ~/.claude/
+  //   project: <projectRoot>/.claude/
+  // For simplicity we walk up the path to find the .claude parent.
+  const posixPath = sourcePath.replaceAll("\\", "/");
+  const claudeIdx = posixPath.lastIndexOf("/.claude/");
+  if (claudeIdx === -1) {
+    log("WARN", "Scanner.insertAssetRow: cannot derive claudeRoot from path — skipping", {
+      sourcePath,
+    });
+    return null;
+  }
+  const claudeRoot = posixPath.slice(0, claudeIdx + "/.claude".length);
+  const identifier = pathToAssetIdentifier(sourcePath, claudeRoot);
+  if (identifier === null) {
+    log("WARN", "Scanner.insertAssetRow: pathToAssetIdentifier returned null — skipping", {
+      sourcePath,
+      claudeRoot,
+    });
+    return null;
+  }
+
+  const meta = await readFileMetadata(sourcePath);
+  if (meta === null) {
+    // readFileMetadata already logged the failure.
+    return null;
+  }
+
+  const now = Date.now();
+  const newId = crypto.randomUUID();
+
+  const row: AssetRow = {
+    id: newId,
+    workspace_id: DEFAULT_WORKSPACE_ID,
+    author_id: DEFAULT_AUTHOR_ID,
+    visibility: DEFAULT_VISIBILITY,
+    created_at: now,
+    updated_at: now,
+    deleted_at: null,
+    kind: identifier.kind,
+    name: identifier.name,
+    scope,
+    project_id: projectId,
+    source_path: sourcePath,
+    validation_status: "valid",
+    shadowed_by_project_id: null,
+    last_modified_by: "external",
+    last_modified_at: meta.mtimeMs,
+    front_matter_json: null,
+    body_excerpt: meta.bodyExcerptText,
+  };
+
+  const stmt = db.prepare(INSERT_SQL);
+  // bun:sqlite returns the number of rows changed. INSERT OR IGNORE returns 0
+  // changed rows when the unique constraint fires (no-op case).
+  const result = stmt.run({
+    $id: row.id,
+    $workspace_id: row.workspace_id,
+    $author_id: row.author_id,
+    $visibility: row.visibility,
+    $created_at: row.created_at,
+    $updated_at: row.updated_at,
+    $deleted_at: row.deleted_at,
+    $kind: row.kind,
+    $name: row.name,
+    $scope: row.scope,
+    $project_id: row.project_id,
+    $source_path: row.source_path,
+    $validation_status: row.validation_status,
+    $shadowed_by_project_id: row.shadowed_by_project_id,
+    $last_modified_by: row.last_modified_by,
+    $last_modified_at: row.last_modified_at,
+    $front_matter_json: row.front_matter_json,
+    $body_excerpt: row.body_excerpt,
+  });
+
+  if (result.changes === 0) {
+    // Row already existed — INSERT OR IGNORE was a no-op.
+    log("INFO", "Scanner.insertAssetRow: row already exists (INSERT OR IGNORE no-op)", {
+      sourcePath,
+    });
+    return null;
+  }
+
+  log("INFO", "Scanner.insertAssetRow: inserted new asset row", {
+    sourcePath,
+    kind: identifier.kind,
+    name: identifier.name,
+    scope,
+    projectId,
+    id: newId,
+  });
+
+  return newId;
+}
+
+// ---------------------------------------------------------------------------
 // Public API — runColdLaunchScan
 // ---------------------------------------------------------------------------
 
@@ -472,6 +597,7 @@ export async function runColdLaunchScan(db: Database): Promise<ScanTotals> {
 
   // Flatten global assets with metadata reads.
   const globalInsertRows: AssetRow[] = [];
+  // Local to each invocation — no shared mutable state (CR-6: confirmed-no-op 2026-05-18, already block-scoped)
   const globalKindCounts: Record<string, number> = {
     skill: 0,
     agent: 0,
@@ -616,9 +742,9 @@ export async function runColdLaunchScan(db: Database): Promise<ScanTotals> {
  * logic as `runColdLaunchScan` but restricts enumeration to one project's
  * .claude/ subtrees and uses `INSERT OR IGNORE` for idempotency.
  *
- * Note: CR-6 (`globalKindCounts` refactor) is Batch 2 scope — this function
- * duplicates some counting logic intentionally. Do NOT refactor the two scan
- * functions into a shared helper until CR-6 is scheduled.
+ * Note: CR-6 (`globalKindCounts` refactor) was evaluated in Batch 2 and confirmed
+ * a no-op — `globalKindCounts` in runColdLaunchScan() is already block-scoped (line 475).
+ * No shared mutable state existed; no refactor was needed.
  *
  * @param db          Open Database instance.
  * @param projectRoot Absolute path to the project root (e.g., "/Users/zeke/MyProject").

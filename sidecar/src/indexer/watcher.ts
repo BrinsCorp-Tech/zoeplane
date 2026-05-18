@@ -532,6 +532,35 @@ export async function stopWatcher(): Promise<void> {
   });
 }
 
+/**
+ * Return true if `path` is under any currently-watched root (global or project).
+ *
+ * POSIX-normalises the input before comparison so that paths with Windows-style
+ * backslashes are matched correctly on all platforms (Active Constraint 8).
+ *
+ * Used by the event-router's `register_open_editor` handler to validate that
+ * a path being registered as "open" is actually within a watched scope.
+ */
+export function isPathWatched(path: string): boolean {
+  const normalised = resolve(path).replaceAll("\\", "/");
+
+  for (const root of globalRoots) {
+    const posixRoot = root.replaceAll("\\", "/");
+    if (normalised.startsWith(posixRoot)) {
+      return true;
+    }
+  }
+
+  for (const [, watchPath] of projectRootMap.entries()) {
+    const posixWatch = watchPath.replaceAll("\\", "/");
+    if (normalised.startsWith(posixWatch)) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
 // ---------------------------------------------------------------------------
 // Test-only exports — available only when NODE_ENV === "test"
 // Do NOT import in production code paths.
