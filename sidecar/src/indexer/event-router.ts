@@ -16,15 +16,17 @@
 //   POST /editor/close { path: string } → removes path from editorOpenSet
 //
 // Paths in editorOpenSet must be under a watched root (isPathWatched guard).
-// Normalization: all paths in the set are canonicalized via path.resolve then
-// POSIX-normalized (AC-8 Windows-CI compliance).
+// Normalization: backslash → forward-slash at entry only (AC-8 Windows-CI
+// compliance). path.resolve() is NOT used because callers always pass absolute
+// paths (chokidar emits absolute; Tauri command boundary applies to_posix()).
+// Drive-letter prefixes (Windows D:/...) are preserved as-is for DB consistency.
 //
 // Exports:
 //   initEventRouter(db, deps) → { unsubscribe, registerOpenEditor, unregisterOpenEditor }
 //   See EditorRegistrationError for the rejection shape.
 
 import { Database } from "bun:sqlite";
-import { resolve, join } from "node:path";
+import { join } from "node:path";
 import { log } from "../log";
 import {
   LIBRARY_REFRESH,
@@ -196,7 +198,7 @@ export function initEventRouter(db: Database, deps: EventRouterDeps): EventRoute
   const editorOpenSet = new Set<string>();
 
   function normalizePath(p: string): string {
-    return resolve(p).replaceAll("\\", "/");
+    return p.replaceAll("\\", "/");
   }
 
   // -------------------------------------------------------------------------
