@@ -28,6 +28,51 @@
             "--migrations-dir",
             { "validator": "^.+$" }
           ]
+        },
+        {
+          "name": "open",
+          "cmd": "open",
+          "args": [{ "validator": "^-R$" }, { "validator": "^.+$" }]
+        },
+        {
+          "name": "open-default",
+          "cmd": "open",
+          "args": [{ "validator": "^.+$" }]
+        },
+        {
+          "name": "explorer",
+          "cmd": "explorer",
+          "args": [{ "validator": "^/select,.+$" }]
+        },
+        {
+          "name": "xdg-open",
+          "cmd": "xdg-open",
+          "args": [{ "validator": "^.+$" }]
+        },
+        {
+          "name": "code",
+          "cmd": "code",
+          "args": [{ "validator": "^.+$" }]
+        },
+        {
+          "name": "cursor",
+          "cmd": "cursor",
+          "args": [{ "validator": "^.+$" }]
+        },
+        {
+          "name": "zed",
+          "cmd": "zed",
+          "args": [{ "validator": "^.+$" }]
+        },
+        {
+          "name": "cmd-start",
+          "cmd": "cmd",
+          "args": [
+            { "validator": "^/c$" },
+            { "validator": "^start$" },
+            { "validator": "^$" },
+            { "validator": "^.+$" }
+          ]
         }
       ]
     },

@@ -169,6 +169,8 @@ export type {
   ValidationCompletedEvent,
   AssetValidationUpdatedEvent,
   HookIndexCompletedEvent,
+  LibraryRefreshEvent,
+  AssetExternallyModifiedWhileOpenEvent,
   WatcherEvent,
 } from "./watcher";
 export {
@@ -179,6 +181,8 @@ export {
   VALIDATION_COMPLETED,
   ASSET_VALIDATION_UPDATED,
   HOOK_INDEX_COMPLETED,
+  LIBRARY_REFRESH,
+  ASSET_EXTERNALLY_MODIFIED_WHILE_OPEN,
 } from "./watcher";
 
 // ============================================================

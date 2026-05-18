@@ -38,6 +38,16 @@ export const ASSET_VALIDATION_UPDATED = "asset:validation:updated" as const;
 /** SSE event type name for HookIndexCompletedEvent. */
 export const HOOK_INDEX_COMPLETED = "hook:index:completed" as const;
 
+/** SSE event type name for LibraryRefreshEvent (Story 3.8 — FR-007). */
+export const LIBRARY_REFRESH = "library:refresh" as const;
+
+/**
+ * SSE event type name for AssetExternallyModifiedWhileOpenEvent (Story 3.8 — FR-006 boundary).
+ * Emitted when a watcher event fires for a path that is registered in the editorOpenSet.
+ * Epic 06 editor consumes this to render the FR-006 "modified while editing" banner.
+ */
+export const ASSET_EXTERNALLY_MODIFIED_WHILE_OPEN = "asset:externally-modified-while-open" as const;
+
 // ============================================================
 // Event shapes
 // ============================================================
@@ -208,6 +218,75 @@ export interface HookIndexCompletedEvent {
   elapsedMs: number;
 }
 
+/**
+ * Emitted by the event-router once per debounce window, summarising all
+ * asset-level changes that occurred within that window. Library views
+ * subscribe to this event to re-render without polling.
+ *
+ * `action` distinguishes three mutually exclusive cases:
+ *   - "inserted" — a brand-new file was detected and a new assets row was
+ *                  inserted (FR-007, Story 3.8 AC #5).
+ *   - "updated"  — an existing file was modified; the row's validation_status
+ *                  and front_matter_json have been re-stamped (AC #1, #2).
+ *   - "removed"  — the canonical file was deleted; the row has been soft-deleted
+ *                  via deleted_at (AC #6).
+ *
+ * Story 3.8 is the sole emitter. Consumed by Epic 06 Library views.
+ */
+export interface LibraryRefreshEvent {
+  type: typeof LIBRARY_REFRESH;
+  /** The asset kind that changed (e.g., "skill", "agent"). */
+  kind: string;
+  /** Asset name as stored in assets.name. */
+  name: string;
+  /** Scope of the asset row ("global" | "project" | "local"). */
+  scope: string;
+  /**
+   * Project UUID if the asset is project-scoped, or null for global assets.
+   * Library views use this to filter to the active project.
+   */
+  projectId: string | null;
+  /**
+   * Current validity status after re-parse. Present for "inserted" and
+   * "updated" actions; undefined for "removed" (no row to re-parse).
+   */
+  validityStatus?: "valid" | "warnings" | "invalid";
+  /** Whether this is an insert, update, or soft-delete event. */
+  action: "inserted" | "updated" | "removed";
+  /**
+   * Batch-window summary counters — how many events of each kind were
+   * coalesced into this single LibraryRefreshEvent emission.
+   */
+  summary: {
+    created: number;
+    modified: number;
+    removed: number;
+  };
+}
+
+/**
+ * Emitted when an AssetIndexUpdatedEvent fires for a path that is currently
+ * registered in the `editorOpenSet` (i.e., the user has that file open for
+ * editing in the Epic 06 editor).
+ *
+ * The data layer (assets row) IS updated silently as with any other watcher
+ * event. However, the silent LibraryRefreshEvent is SUPPRESSED for this path,
+ * and this event is emitted instead so Epic 06's editor can render the
+ * FR-006 "modified while editing" banner.
+ *
+ * Story 3.8 is the sole emitter. Consumed by Epic 06 editor surfaces.
+ */
+export interface AssetExternallyModifiedWhileOpenEvent {
+  type: typeof ASSET_EXTERNALLY_MODIFIED_WHILE_OPEN;
+  /** Absolute path of the file that was modified externally. */
+  path: string;
+  /**
+   * Project UUID if the file is project-scoped, or null for global assets.
+   * The editor uses this to scope its banner to the correct project panel.
+   */
+  projectId: string | null;
+}
+
 /** Union of all watcher event types for exhaustive switching in consumers. */
 export type WatcherEvent =
   | AssetIndexUpdatedEvent
@@ -216,4 +295,6 @@ export type WatcherEvent =
   | AssetIndexHydratedEvent
   | ValidationCompletedEvent
   | AssetValidationUpdatedEvent
-  | HookIndexCompletedEvent;
+  | HookIndexCompletedEvent
+  | LibraryRefreshEvent
+  | AssetExternallyModifiedWhileOpenEvent;

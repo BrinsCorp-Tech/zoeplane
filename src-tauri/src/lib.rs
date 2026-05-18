@@ -153,6 +153,12 @@ pub fn run() {
             commands::project::switch_project,
             commands::project::add_project,
             commands::project::remove_project,
+            // Story 3.8: Editor open/close registration (FR-006 boundary).
+            commands::editor::register_open_editor,
+            commands::editor::unregister_open_editor,
+            // Story 3.9: Asset reveal + editor open (FR-034 / FR-035).
+            commands::assets::reveal_in_finder,
+            commands::assets::open_in_editor,
         ])
         .setup(|app| {
             info!("App setup — spawning sidecar");
