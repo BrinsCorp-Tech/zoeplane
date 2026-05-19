@@ -16,17 +16,21 @@
  * cross-platform in any test that needs it.
  */
 
-import { describe, it, expect, beforeEach, afterEach } from "vitest";
-import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from "node:fs";
+import { describe, it, expect, beforeAll, beforeEach, afterEach } from "vitest";
+import { mkdtempSync, mkdirSync, writeFileSync, rmSync, realpathSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { fileURLToPath } from "node:url";
+import { createRequire } from "node:module";
 import type { Database, Statement } from "bun:sqlite";
 import {
   runValidationPipeline,
   revalidateAsset,
   subscribeToValidatorEvents,
+  resetGrayMatterCache,
   type ValidationTotals,
 } from "../validator";
+import { setYamlParser } from "../front-matter-parser";
 import type { WatcherEvent } from "@zoeplane/shared-types";
 import {
   VALIDATION_COMPLETED,
@@ -237,6 +241,23 @@ Body content present.
 }
 
 // ---------------------------------------------------------------------------
+// YAML parser injection for Node/Vitest workers (Finding 1 fix)
+//
+// Mirrors the setup in front-matter-parser.test.ts: inject js-yaml via
+// createRequire from gray-matter's real bun-cache path so that parseFrontMatter
+// (called from validator.ts's customYamlEngine) works under Node.
+// ---------------------------------------------------------------------------
+
+beforeAll(() => {
+  const gmRealPath = realpathSync(
+    join(fileURLToPath(import.meta.url), "../../../../node_modules/gray-matter/index.js"),
+  );
+  const requireFromGm = createRequire(gmRealPath);
+  const jsYaml = requireFromGm("js-yaml") as { safeLoad: (s: string) => unknown };
+  setYamlParser((s) => jsYaml.safeLoad(s));
+});
+
+// ---------------------------------------------------------------------------
 // Test fixture state
 // ---------------------------------------------------------------------------
 
@@ -245,6 +266,9 @@ const originalHome = process.env.HOME;
 const originalUserProfile = process.env.USERPROFILE;
 
 beforeEach(() => {
+  // Reset gray-matter lazy-load cache before each test to prevent module-level
+  // state leaking across test cases (Finding 4 fix).
+  resetGrayMatterCache();
   tmpRoot = mkdtempSync(join(tmpdir(), "zp-validator-test-"));
   process.env.HOME = tmpRoot;
   process.env.USERPROFILE = tmpRoot;
@@ -383,7 +407,11 @@ describe("runValidationPipeline — warnings (AC-2)", () => {
 // ---------------------------------------------------------------------------
 
 describe("runValidationPipeline — invalid asset (AC-3)", () => {
-  it("sets validation_status=invalid and front_matter_json=NULL for malformed YAML", async () => {
+  it("Story 6.1: BC1 pre-processor (Tier 2) recovers [unclosed bracket — sets warnings, not invalid", async () => {
+    // ADR-008 three-tier strategy: the BC1 escape pre-processor (Tier 2) wraps
+    // `[unclosed bracket` in double quotes so Bun.YAML can parse it. The file is
+    // recoverable — it becomes `warnings` (missing agent recommended fields) rather
+    // than `invalid`. This matches Claude Code's native behavior.
     const badPath = writeAsset("agents/bad-agent.md", malformedFrontMatter());
 
     const { db, rows } = makeFakeDb([
@@ -399,8 +427,44 @@ describe("runValidationPipeline — invalid asset (AC-3)", () => {
 
     const totals = await runValidationPipeline(db);
 
-    expect(totals.invalid).toBe(1);
+    // Tier 2 recovers the unclosed bracket by quoting the value; agent fields are
+    // missing (no description/voice) so the result is `warnings`, not `invalid`.
+    expect(totals.warnings).toBe(1);
+    expect(totals.invalid).toBe(0);
     const row = rows.find((r) => r.id === "id-bad-1")!;
+    expect(row.validation_status).toBe("warnings");
+    // front_matter_json is populated (partially recovered data).
+    expect(row.front_matter_json).not.toBeNull();
+  });
+
+  it("sets validation_status=invalid for totally unrecoverable YAML (all three tiers fail)", async () => {
+    // A truly pathological front-matter block where Tier 1, Tier 2, and Tier 3 all
+    // fail: no key: value lines for allowlisted fields, deeply broken structure.
+    const unrecoverableContent = `---
+{{{ completely broken yaml |||
+%TAG !foo! bar:
+: : : : :
+---
+
+Some body content here.
+`;
+    const badPath = writeAsset("agents/unrecoverable-agent.md", unrecoverableContent);
+
+    const { db, rows } = makeFakeDb([
+      {
+        id: "id-unrecov-1",
+        source_path: badPath,
+        kind: "agent",
+        validation_status: "valid",
+        front_matter_json: null,
+        deleted_at: null,
+      },
+    ]);
+
+    const totals = await runValidationPipeline(db);
+
+    expect(totals.invalid).toBe(1);
+    const row = rows.find((r) => r.id === "id-unrecov-1")!;
     expect(row.validation_status).toBe("invalid");
     expect(row.front_matter_json).toBeNull();
   });
