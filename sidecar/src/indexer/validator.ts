@@ -37,6 +37,7 @@
 import { Database } from "bun:sqlite";
 import { stat, readFile } from "node:fs/promises";
 import { log } from "../log";
+import { parseFrontMatter, extractRawYamlBlock } from "./front-matter-parser";
 import {
   VALIDATION_COMPLETED,
   ASSET_VALIDATION_UPDATED,
@@ -137,8 +138,41 @@ let matterFn: MatterFn | null = null;
 let grayMatterLoadAttempted = false;
 
 /**
- * Lazily load gray-matter. Returns the matter() function on success, or null
- * if the module cannot be imported (triggers fallback mode in callers).
+ * Reset the gray-matter loader cache. Call in test beforeEach to prevent
+ * module-level state from leaking between test cases (Finding 4 fix).
+ * Never call in production code.
+ */
+export function resetGrayMatterCache(): void {
+  matterFn = null;
+  grayMatterLoadAttempted = false;
+}
+
+/**
+ * Custom YAML engine for gray-matter that replaces the default js-yaml engine
+ * with Bun.YAML.parse + the BC1 escape pre-processor (ADR-008 Tiers 1 + 2).
+ *
+ * gray-matter's `engines.yaml` hook receives the raw YAML block string and must
+ * return a parsed object. parseFrontMatter handles Tier 1 and Tier 2; Tier 3 is
+ * invoked from the catch block in parseAssetFile when gray-matter itself throws.
+ *
+ * If Tiers 1 and 2 both fail, this function throws so that gray-matter's catch
+ * block in parseAssetFile can attempt Tier 3.
+ */
+function customYamlEngine(raw: string): Record<string, unknown> {
+  const result = parseFrontMatter(raw);
+  if (result.data !== null && result.mode !== "fallback") {
+    // Tier 1 or Tier 2 succeeded — return the parsed object to gray-matter.
+    return result.data;
+  }
+  // Tier 1 and Tier 2 both failed (mode is "failed" or "fallback").
+  // Throw so the catch block in parseAssetFile can attempt Tier 3.
+  throw new Error("front-matter YAML parse failed (Tiers 1 and 2 exhausted)");
+}
+
+/**
+ * Lazily load gray-matter with the custom YAML engine (ADR-008).
+ * Returns the matter() function on success, or null if the module cannot be
+ * imported (triggers fallback mode in callers).
  */
 async function loadGrayMatter(): Promise<MatterFn | null> {
   if (grayMatterLoadAttempted) {
@@ -149,7 +183,21 @@ async function loadGrayMatter(): Promise<MatterFn | null> {
     // gray-matter ships its own .d.ts — the default export is the matter() function.
     const mod = await import("gray-matter");
     // gray-matter exports itself as a CJS default; dynamic import wraps it in `.default`.
-    matterFn = (mod.default ?? mod) as unknown as MatterFn;
+    const rawMatter = (mod.default ?? mod) as unknown as (
+      content: string,
+      options?: Record<string, unknown>,
+    ) => { data: Record<string, unknown>; content: string };
+
+    // Wrap matter() with the custom YAML engine (ADR-008 §Implementation surface).
+    // gray-matter's `engines.yaml` option replaces the YAML parse step only;
+    // delimiter detection and body extraction remain handled by gray-matter.
+    matterFn = (content: string) =>
+      rawMatter(content, {
+        engines: {
+          yaml: customYamlEngine,
+        },
+      });
+
     return matterFn;
   } catch (err) {
     log("ERROR", "Validator: failed to import gray-matter — falling back to passthrough mode", {
@@ -216,12 +264,37 @@ async function parseAssetFile(
     return { status: "invalid", frontMatterJson: null, warnings: ["read-failed"] };
   }
 
-  // --- Parse with gray-matter ---
+  // --- Parse with gray-matter (ADR-008 three-tier strategy) ---
+  //
+  // gray-matter's YAML engine is replaced with customYamlEngine (Tiers 1 + 2).
+  // If the custom engine throws (both Tier 1 and Tier 2 failed), gray-matter
+  // itself throws and we fall through to Tier 3 here.
   let parsed: { data: Record<string, unknown>; content: string };
   try {
     parsed = matter(content);
   } catch (err) {
-    log("INFO", "Validator: gray-matter parse failure — marking invalid", {
+    // gray-matter threw — Tiers 1 and 2 both failed. Attempt Tier 3 (per-field
+    // regex fallback) scoped to the front-matter region only to prevent body
+    // prose from producing spurious field matches (Finding 2 fix).
+    const rawBlock = extractRawYamlBlock(content);
+    const tier3Result = parseFrontMatter(rawBlock ?? content);
+
+    if (tier3Result.mode === "fallback" && tier3Result.data !== null) {
+      // Tier 3 extracted at least one allowlisted field.
+      log("INFO", "Validator: Tier 3 fallback extracted partial front-matter", {
+        path: sourcePath,
+        fields: Object.keys(tier3Result.data),
+        error: String(err),
+      });
+      return {
+        status: "warnings",
+        frontMatterJson: JSON.stringify(tier3Result.data),
+        warnings: ["front-matter-fallback-extraction"],
+      };
+    }
+
+    // All three tiers failed.
+    log("INFO", "Validator: all three parse tiers failed — marking invalid", {
       path: sourcePath,
       error: String(err),
     });

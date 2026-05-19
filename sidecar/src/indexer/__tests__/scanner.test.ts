@@ -553,31 +553,32 @@ describe("runColdLaunchScan — depth guard for direct-md (commands)", () => {
 describe.skipIf(process.platform === "win32")(
   "runColdLaunchScan — permission-denied on direct-md file",
   () => {
-  it("skips an unreadable agent .md file and produces zero rows for it", async () => {
-    // Create a valid agent file alongside a restricted one.
-    mkAgent(claudeDir, "readable-agent");
-    const restrictedPath = join(claudeDir, "agents", "restricted.md");
-    writeFileSync(restrictedPath, "# Restricted agent");
-    chmodSync(restrictedPath, 0o000); // no read permission
+    it("skips an unreadable agent .md file and produces zero rows for it", async () => {
+      // Create a valid agent file alongside a restricted one.
+      mkAgent(claudeDir, "readable-agent");
+      const restrictedPath = join(claudeDir, "agents", "restricted.md");
+      writeFileSync(restrictedPath, "# Restricted agent");
+      chmodSync(restrictedPath, 0o000); // no read permission
 
-    const { db, rows } = makeFakeDb();
-    let totals: Awaited<ReturnType<typeof runColdLaunchScan>>;
-    try {
-      totals = await runColdLaunchScan(db);
-    } finally {
-      // Restore permissions so afterEach rmSync can clean up.
-      chmodSync(restrictedPath, 0o644);
-    }
+      const { db, rows } = makeFakeDb();
+      let totals: Awaited<ReturnType<typeof runColdLaunchScan>>;
+      try {
+        totals = await runColdLaunchScan(db);
+      } finally {
+        // Restore permissions so afterEach rmSync can clean up.
+        chmodSync(restrictedPath, 0o644);
+      }
 
-    // The scanner must not throw — it logs WARN and continues.
-    // Only the readable agent should produce a row.
-    const agentRows = ofKind(rows, "agent");
-    expect(agentRows.some((r) => r.$name === "readable-agent")).toBe(true);
-    expect(agentRows.some((r) => r.$name === "restricted")).toBe(false);
-    // totals.agents reflects only successfully-read files.
-    expect(totals!.agents).toBe(1);
-  });
-});
+      // The scanner must not throw — it logs WARN and continues.
+      // Only the readable agent should produce a row.
+      const agentRows = ofKind(rows, "agent");
+      expect(agentRows.some((r) => r.$name === "readable-agent")).toBe(true);
+      expect(agentRows.some((r) => r.$name === "restricted")).toBe(false);
+      // totals.agents reflects only successfully-read files.
+      expect(totals!.agents).toBe(1);
+    });
+  },
+);
 
 // ---------------------------------------------------------------------------
 // Idempotency — INSERT OR IGNORE means re-running the fake doesn't error
