@@ -25,80 +25,26 @@
 
 use std::path::PathBuf;
 
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
 use tauri::{command, AppHandle, State};
 use tauri_plugin_fs::FsExt;
 use tauri_plugin_shell::ShellExt;
 use tracing::{error, info, warn};
 
 use crate::commands::fs::is_allowed_for_probe;
+use crate::commands::response::CommandResponse;
 use crate::{HttpClient, SidecarPort};
 
 // ---------------------------------------------------------------------------
-// Response types
+// Response type alias
 // ---------------------------------------------------------------------------
 
-/// Structured response returned by both reveal_in_finder and open_in_editor.
+/// `ShellResponse` is a backward-compatible alias for `CommandResponse`.
 ///
-/// On success: `{ ok: true }`
-/// On failure: `{ ok: false, code: "<error_code>", message: "<human_string>", path? }`
-#[derive(Debug, Serialize)]
-pub struct ShellResponse {
-    pub ok: bool,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub code: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub message: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub path: Option<String>,
-}
-
-impl ShellResponse {
-    fn success() -> Self {
-        ShellResponse {
-            ok: true,
-            code: None,
-            message: None,
-            path: None,
-        }
-    }
-
-    fn scope_denied(path: &str) -> Self {
-        ShellResponse {
-            ok: false,
-            code: Some("scope_denied".to_string()),
-            message: Some(format!("Path is outside the runtime FS scope: {path}")),
-            path: Some(path.to_string()),
-        }
-    }
-
-    fn file_not_found(path: &str) -> Self {
-        ShellResponse {
-            ok: false,
-            code: Some("file_not_found".to_string()),
-            message: Some(format!("Path does not exist on disk: {path}")),
-            path: Some(path.to_string()),
-        }
-    }
-
-    fn shell_invocation_failed(message: String) -> Self {
-        ShellResponse {
-            ok: false,
-            code: Some("shell_invocation_failed".to_string()),
-            message: Some(message),
-            path: None,
-        }
-    }
-
-    fn error(code: &str, message: String) -> Self {
-        ShellResponse {
-            ok: false,
-            code: Some(code.to_string()),
-            message: Some(message),
-            path: None,
-        }
-    }
-}
+/// Story 3.10 (AC #7) moved the shared response struct to `commands/response.rs`
+/// as `CommandResponse`. This alias preserves the name used in the unit tests
+/// and in any callers that imported `ShellResponse` directly from this module.
+type ShellResponse = CommandResponse;
 
 // ---------------------------------------------------------------------------
 // reveal_in_finder
@@ -184,7 +130,11 @@ pub async fn reveal_in_finder(app: AppHandle, path: String) -> Result<ShellRespo
 /// Platform-specific reveal implementation.
 /// Returns Ok(()) on successful spawn; Err(String) on failure.
 #[allow(unused_variables)]
-async fn reveal_platform(app: &AppHandle, path: &str, path_buf: &PathBuf) -> Result<(), String> {
+async fn reveal_platform(
+    app: &AppHandle,
+    path: &str,
+    path_buf: &std::path::Path,
+) -> Result<(), String> {
     #[cfg(target_os = "macos")]
     {
         app.shell()
@@ -301,7 +251,7 @@ pub async fn open_in_editor(
             Err(e) => {
                 let msg = format!("Failed to acquire SidecarPort lock: {e}");
                 error!(target: "assets-editor", error = %msg, "open_in_editor: lock failure");
-                return Ok(ShellResponse::error("internal_error", msg));
+                return Ok(ShellResponse::internal_error(msg));
             }
         };
         *guard
@@ -511,7 +461,7 @@ mod tests {
 
     #[test]
     fn shell_response_error_variant_serialises_correctly() {
-        let resp = ShellResponse::error("internal_error", "lock poisoned".to_string());
+        let resp = ShellResponse::internal_error("lock poisoned".to_string());
         let json = serde_json::to_value(&resp).expect("serialisation must succeed");
         assert_eq!(json["ok"], false);
         assert_eq!(json["code"], "internal_error");

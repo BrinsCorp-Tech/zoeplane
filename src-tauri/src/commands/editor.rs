@@ -23,6 +23,7 @@
 use tauri::{command, State};
 use tracing::{error, info, warn};
 
+use crate::commands::response::CommandResponse;
 use crate::{HttpClient, SidecarPort};
 
 // ---------------------------------------------------------------------------
@@ -64,14 +65,18 @@ async fn sidecar_post(
 /// `AssetExternallyModifiedWhileOpenEvent` (Epic 06 FR-006 banner trigger)
 /// instead of the silent `LibraryRefreshEvent` (FR-007).
 ///
-/// Returns `Err` with `{ code: "path_not_watched", path }` JSON if the path is
+/// Returns `Ok(CommandResponse::err("path_not_watched", ...))` if the path is
 /// not under any watched root — the editor must only register watched paths.
+///
+/// Returns `Ok(CommandResponse)` always — the Err branch is structurally unreachable
+/// but required by Tauri's async command trait constraint (AC #7: no throws across
+/// the Tauri command boundary).
 #[command]
 pub async fn register_open_editor(
     port_state: State<'_, SidecarPort>,
     http_client: State<'_, HttpClient>,
     path: String,
-) -> Result<(), String> {
+) -> Result<CommandResponse, String> {
     let path = to_posix(&path);
 
     info!(
@@ -80,38 +85,45 @@ pub async fn register_open_editor(
         "register_open_editor: registering path"
     );
 
-    let port = {
-        let guard = port_state
-            .0
-            .lock()
-            .map_err(|e| format!("Failed to acquire SidecarPort lock: {e}"))?;
-        *guard
+    let port = match port_state.0.lock() {
+        Ok(guard) => *guard,
+        Err(e) => {
+            let msg = format!("Failed to acquire SidecarPort lock: {e}");
+            error!(target: "editor-open", "{}", msg);
+            return Ok(CommandResponse::internal_error(msg));
+        }
     };
     let Some(port) = port else {
-        return Err("register_open_editor: sidecar port not yet known".to_string());
+        return Ok(CommandResponse::internal_error(
+            "register_open_editor: sidecar port not yet known".to_string(),
+        ));
     };
 
-    let status = sidecar_post(
+    let status = match sidecar_post(
         &http_client.0,
         port,
         "/editor/open",
         serde_json::json!({ "path": path }),
     )
     .await
-    .map_err(|e| format!("register_open_editor: sidecar /editor/open POST failed: {e}"))?;
+    {
+        Ok(s) => s,
+        Err(e) => {
+            let msg = format!("register_open_editor: sidecar /editor/open POST failed: {e}");
+            error!(target: "editor-open", path = %path, "{}", msg);
+            return Ok(CommandResponse::internal_error(msg));
+        }
+    };
 
     if status == 400 {
-        let msg = format!(
-            "register_open_editor: path is not under any watched root — {{ \"code\": \"path_not_watched\", \"path\": \"{path}\" }}"
-        );
         warn!(target: "editor-open", path = %path, "register_open_editor: path_not_watched");
-        return Err(msg);
+        return Ok(CommandResponse::path_not_watched(&path));
     }
 
     if status >= 400 {
-        return Err(format!(
-            "register_open_editor: sidecar returned HTTP {status} for /editor/open"
-        ));
+        let msg = format!("register_open_editor: sidecar returned HTTP {status} for /editor/open");
+        error!(target: "editor-open", path = %path, "{}", msg);
+        return Ok(CommandResponse::internal_error(msg));
     }
 
     info!(
@@ -120,7 +132,7 @@ pub async fn register_open_editor(
         "register_open_editor: registered successfully"
     );
 
-    Ok(())
+    Ok(CommandResponse::success())
 }
 
 // ---------------------------------------------------------------------------
@@ -131,12 +143,16 @@ pub async fn register_open_editor(
 ///
 /// Subsequent watcher events for `path` resume the silent FR-007 reindex path.
 /// This is a no-op on the sidecar side if the path was not registered.
+///
+/// Returns `Ok(CommandResponse)` always — the Err branch is structurally unreachable
+/// but required by Tauri's async command trait constraint (AC #7: no throws across
+/// the Tauri command boundary).
 #[command]
 pub async fn unregister_open_editor(
     port_state: State<'_, SidecarPort>,
     http_client: State<'_, HttpClient>,
     path: String,
-) -> Result<(), String> {
+) -> Result<CommandResponse, String> {
     let path = to_posix(&path);
 
     info!(
@@ -145,36 +161,46 @@ pub async fn unregister_open_editor(
         "unregister_open_editor: unregistering path"
     );
 
-    let port = {
-        let guard = port_state
-            .0
-            .lock()
-            .map_err(|e| format!("Failed to acquire SidecarPort lock: {e}"))?;
-        *guard
+    let port = match port_state.0.lock() {
+        Ok(guard) => *guard,
+        Err(e) => {
+            let msg = format!("Failed to acquire SidecarPort lock: {e}");
+            error!(target: "editor-open", "{}", msg);
+            return Ok(CommandResponse::internal_error(msg));
+        }
     };
     let Some(port) = port else {
-        return Err("unregister_open_editor: sidecar port not yet known".to_string());
+        return Ok(CommandResponse::internal_error(
+            "unregister_open_editor: sidecar port not yet known".to_string(),
+        ));
     };
 
-    let status = sidecar_post(
+    let status = match sidecar_post(
         &http_client.0,
         port,
         "/editor/close",
         serde_json::json!({ "path": path }),
     )
     .await
-    .map_err(|e| format!("unregister_open_editor: sidecar /editor/close POST failed: {e}"))?;
+    {
+        Ok(s) => s,
+        Err(e) => {
+            let msg = format!("unregister_open_editor: sidecar /editor/close POST failed: {e}");
+            error!(target: "editor-open", path = %path, "{}", msg);
+            return Ok(CommandResponse::internal_error(msg));
+        }
+    };
 
     if status >= 400 {
+        let msg =
+            format!("unregister_open_editor: sidecar returned HTTP {status} for /editor/close");
         error!(
             target: "editor-open",
             path = %path,
             status,
             "unregister_open_editor: sidecar returned non-2xx"
         );
-        return Err(format!(
-            "unregister_open_editor: sidecar returned HTTP {status} for /editor/close"
-        ));
+        return Ok(CommandResponse::internal_error(msg));
     }
 
     info!(
@@ -183,7 +209,7 @@ pub async fn unregister_open_editor(
         "unregister_open_editor: unregistered successfully"
     );
 
-    Ok(())
+    Ok(CommandResponse::success())
 }
 
 // ---------------------------------------------------------------------------

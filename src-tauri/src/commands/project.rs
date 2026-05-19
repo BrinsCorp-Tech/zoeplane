@@ -29,6 +29,7 @@ use tauri::{command, AppHandle, Emitter, State};
 use tauri_plugin_fs::FsExt;
 use tracing::{error, info, warn};
 
+use crate::commands::response::CommandResponse;
 use crate::{HttpClient, SidecarPort};
 
 // ---------------------------------------------------------------------------
@@ -120,12 +121,17 @@ async fn sidecar_post(
 ///   8. Emit ProjectSwitchCompletedEvent via Tauri event.
 ///
 /// On FS scope extension failure, emits ProjectSwitchFailedEvent and returns
-/// Err — the previous active project remains active (AC #8).
+/// `Ok(CommandResponse::err("fs_scope_extension_failed", ...))` — the previous
+/// active project remains active (AC #8).
 ///
 /// On missing .claude/ after switch, completes with empty rescan and emits
 /// ProjectClaudeMissingWarning (AC #7).
 ///
 /// `stack_json` and `layout_json` are opaque blobs from the UI.
+///
+/// Returns `Ok(CommandResponse)` always — the Err branch is structurally unreachable
+/// but required by Tauri's async command trait constraint (AC #7: no throws across
+/// the Tauri command boundary).
 #[command]
 pub async fn switch_project(
     app: AppHandle,
@@ -134,7 +140,7 @@ pub async fn switch_project(
     project_id: String,
     stack_json: Option<String>,
     layout_json: Option<String>,
-) -> Result<(), String> {
+) -> Result<CommandResponse, String> {
     let start_ms = now_ms();
     let project_id_posix = project_id.clone(); // UUID — no path normalisation needed
 
@@ -148,16 +154,20 @@ pub async fn switch_project(
     // Step 1: Resolve the sidecar port (needed for HTTP calls later)
     // ------------------------------------------------------------------
     let port = {
-        let guard = port_state
-            .0
-            .lock()
-            .map_err(|e| format!("Failed to acquire SidecarPort lock: {e}"))?;
-        *guard
+        let lock_result = port_state.0.lock();
+        match lock_result {
+            Ok(guard) => *guard,
+            Err(e) => {
+                let msg = format!("Failed to acquire SidecarPort lock: {e}");
+                error!(target: "project-switch", %project_id_posix, "{}", msg);
+                return Ok(CommandResponse::internal_error(msg));
+            }
+        }
     };
     let Some(port) = port else {
         let msg = "switch_project: sidecar port not yet known — sidecar still starting";
         error!(target: "project-switch", %project_id_posix, "{}", msg);
-        return Err(msg.to_string());
+        return Ok(CommandResponse::internal_error(msg.to_string()));
     };
 
     // ------------------------------------------------------------------
@@ -177,7 +187,18 @@ pub async fn switch_project(
     // The story brief says `switch_project(projectId, stack_json, layout_json)`.
     // We need `projectRoot` too — see implementation note in open question #1.
     // For now, query the sidecar for project info.
-    let project_info = get_project_info(&http_client.0, port, &project_id_posix).await?;
+    let project_info = match get_project_info(&http_client.0, port, &project_id_posix).await {
+        Ok(info) => info,
+        Err(e) => {
+            error!(
+                target: "project-switch",
+                project_id = %project_id_posix,
+                error = %e,
+                "switch_project: project lookup failed"
+            );
+            return Ok(CommandResponse::unknown_project(&project_id_posix));
+        }
+    };
     let project_root_raw = project_info.path;
     let project_root = to_posix(&project_root_raw);
 
@@ -360,7 +381,7 @@ pub async fn switch_project(
                 }),
             )
             .ok();
-            return Err(reason);
+            return Ok(CommandResponse::err(ERR_FS_SCOPE_EXTENSION, reason, None));
         }
     }
 
@@ -395,7 +416,7 @@ pub async fn switch_project(
             }),
         )
         .ok();
-        return Ok(());
+        return Ok(CommandResponse::success());
     }
 
     // ------------------------------------------------------------------
@@ -529,7 +550,7 @@ pub async fn switch_project(
         "switch_project: completed"
     );
 
-    Ok(())
+    Ok(CommandResponse::success())
 }
 
 // ---------------------------------------------------------------------------
@@ -540,13 +561,17 @@ pub async fn switch_project(
 ///
 /// Verifies `<projectRoot>/.claude/` exists, then asks the sidecar to insert
 /// a `projects` row. Does NOT auto-activate the project.
+///
+/// Returns `Ok(CommandResponse)` always — the Err branch is structurally unreachable
+/// but required by Tauri's async command trait constraint (AC #7: no throws across
+/// the Tauri command boundary).
 #[command]
 pub async fn add_project(
     _app: AppHandle,
     port_state: State<'_, SidecarPort>,
     http_client: State<'_, HttpClient>,
     project_root: String,
-) -> Result<(), String> {
+) -> Result<CommandResponse, String> {
     let project_root = to_posix(&project_root);
 
     info!(
@@ -580,42 +605,60 @@ pub async fn add_project(
         Ok(_) => {
             let msg = format!(".claude exists but is not a directory at {project_root}");
             error!(target: "project-add", project_root = %project_root, "{}", msg);
-            return Err(msg);
+            return Ok(CommandResponse::err(
+                "claude_dir_not_directory",
+                msg,
+                Some(project_root),
+            ));
         }
         Err(e) => {
             let msg = format!(".claude/ not found at {project_root}: {e}");
             error!(target: "project-add", project_root = %project_root, error = %e, ".claude/ missing");
-            return Err(msg);
+            return Ok(CommandResponse::err(
+                "claude_dir_missing",
+                msg,
+                Some(project_root),
+            ));
         }
     }
 
     // ------------------------------------------------------------------
     // Ask sidecar to insert the projects row (AC #4b)
     // ------------------------------------------------------------------
-    let port = {
-        let guard = port_state
-            .0
-            .lock()
-            .map_err(|e| format!("Failed to acquire SidecarPort lock: {e}"))?;
-        *guard
+    let port = match port_state.0.lock() {
+        Ok(guard) => *guard,
+        Err(e) => {
+            let msg = format!("Failed to acquire SidecarPort lock: {e}");
+            error!(target: "project-add", "{}", msg);
+            return Ok(CommandResponse::internal_error(msg));
+        }
     };
     let Some(port) = port else {
-        return Err("add_project: sidecar port not yet known".to_string());
+        return Ok(CommandResponse::internal_error(
+            "add_project: sidecar port not yet known".to_string(),
+        ));
     };
 
-    let add_status = sidecar_post(
+    let add_status = match sidecar_post(
         &http_client.0,
         port,
         "/projects",
         serde_json::json!({ "projectRoot": project_root }),
     )
     .await
-    .map_err(|e| format!("add_project: sidecar /projects POST failed: {e}"))?;
+    {
+        Ok(status) => status,
+        Err(e) => {
+            let msg = format!("add_project: sidecar /projects POST failed: {e}");
+            error!(target: "project-add", "{}", msg);
+            return Ok(CommandResponse::internal_error(msg));
+        }
+    };
 
     if add_status >= 400 {
-        return Err(format!(
-            "add_project: sidecar returned HTTP {add_status} for /projects"
-        ));
+        let msg = format!("add_project: sidecar returned HTTP {add_status} for /projects");
+        error!(target: "project-add", "{}", msg);
+        return Ok(CommandResponse::internal_error(msg));
     }
 
     info!(
@@ -624,7 +667,7 @@ pub async fn add_project(
         "add_project: project registered (not activated)"
     );
 
-    Ok(())
+    Ok(CommandResponse::success())
 }
 
 // ---------------------------------------------------------------------------
@@ -639,13 +682,17 @@ pub async fn add_project(
 ///      Log the gap; leave scope wider. Documented below.
 ///   c. POST /projects/{id}/remove to sidecar for soft-delete of
 ///      assets + hook_index rows and clear route_stacks + recent_files.
+///
+/// Returns `Ok(CommandResponse)` always — the Err branch is structurally unreachable
+/// but required by Tauri's async command trait constraint (AC #7: no throws across
+/// the Tauri command boundary).
 #[command]
 pub async fn remove_project(
     _app: AppHandle,
     port_state: State<'_, SidecarPort>,
     http_client: State<'_, HttpClient>,
     project_id: String,
-) -> Result<(), String> {
+) -> Result<CommandResponse, String> {
     let project_id = project_id.clone();
 
     info!(
@@ -654,21 +701,35 @@ pub async fn remove_project(
         "remove_project: starting"
     );
 
-    let port = {
-        let guard = port_state
-            .0
-            .lock()
-            .map_err(|e| format!("Failed to acquire SidecarPort lock: {e}"))?;
-        *guard
+    let port = match port_state.0.lock() {
+        Ok(guard) => *guard,
+        Err(e) => {
+            let msg = format!("Failed to acquire SidecarPort lock: {e}");
+            error!(target: "project-remove", "{}", msg);
+            return Ok(CommandResponse::internal_error(msg));
+        }
     };
     let Some(port) = port else {
-        return Err("remove_project: sidecar port not yet known".to_string());
+        return Ok(CommandResponse::internal_error(
+            "remove_project: sidecar port not yet known".to_string(),
+        ));
     };
 
     // ------------------------------------------------------------------
     // Step 1: Look up project root for the close event (AC #3a)
     // ------------------------------------------------------------------
-    let project_info = get_project_info(&http_client.0, port, &project_id).await?;
+    let project_info = match get_project_info(&http_client.0, port, &project_id).await {
+        Ok(info) => info,
+        Err(e) => {
+            error!(
+                target: "project-remove",
+                project_id = %project_id,
+                error = %e,
+                "remove_project: project lookup failed"
+            );
+            return Ok(CommandResponse::unknown_project(&project_id));
+        }
+    };
     let project_root = to_posix(&project_info.path);
 
     // ------------------------------------------------------------------
@@ -741,19 +802,28 @@ pub async fn remove_project(
     // ------------------------------------------------------------------
     // Step 4: Soft-delete via sidecar (AC #3c, #3d)
     // ------------------------------------------------------------------
-    let remove_status = sidecar_post(
+    let remove_status = match sidecar_post(
         &http_client.0,
         port,
         &format!("/projects/{project_id}/remove"),
         serde_json::json!({}),
     )
     .await
-    .map_err(|e| format!("remove_project: sidecar /projects/{project_id}/remove failed: {e}"))?;
+    {
+        Ok(status) => status,
+        Err(e) => {
+            let msg = format!("remove_project: sidecar /projects/{project_id}/remove failed: {e}");
+            error!(target: "project-remove", project_id = %project_id, "{}", msg);
+            return Ok(CommandResponse::internal_error(msg));
+        }
+    };
 
     if remove_status >= 400 {
-        return Err(format!(
+        let msg = format!(
             "remove_project: sidecar returned HTTP {remove_status} for /projects/{project_id}/remove"
-        ));
+        );
+        error!(target: "project-remove", project_id = %project_id, "{}", msg);
+        return Ok(CommandResponse::internal_error(msg));
     }
 
     info!(
@@ -762,7 +832,7 @@ pub async fn remove_project(
         "remove_project: complete"
     );
 
-    Ok(())
+    Ok(CommandResponse::success())
 }
 
 // ---------------------------------------------------------------------------
