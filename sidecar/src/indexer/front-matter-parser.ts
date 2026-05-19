@@ -245,7 +245,11 @@ export function extractFields(s: string): Record<string, string> {
  * to the front-matter region only, preventing body prose from being scanned.
  */
 export function extractRawYamlBlock(content: string): string | null {
-  const match = content.match(FM_DELIMITER_RE);
+  // Normalize CRLF → LF at entry. Windows CI checks out files with \r\n;
+  // FM_DELIMITER_RE and downstream splits are all authored for \n only.
+  // Durable rule: feedback_path_helpers_normalize_posix.md — normalize at entry.
+  const normalized = content.replace(/\r\n/g, "\n");
+  const match = normalized.match(FM_DELIMITER_RE);
   return match ? (match[1] ?? null) : null;
 }
 
@@ -260,11 +264,17 @@ export function extractRawYamlBlock(content: string): string | null {
  * @returns ParseFrontMatterResult with data, mode, and warnings.
  */
 export function parseFrontMatter(raw: string): ParseFrontMatterResult {
+  // Normalize CRLF → LF at entry. Production reads from chokidar+fs.readFile;
+  // operator's machine may produce files with any line-ending. Tests on
+  // Windows CI receive CRLF-checked-out fixtures. Single normalization here
+  // protects every downstream regex and split("\n") from line-ending drift.
+  // Durable rule: feedback_path_helpers_normalize_posix.md — normalize at entry.
+  const normalized = raw.replace(/\r\n/g, "\n");
   // -------------------------------------------------------------------------
   // Tier 1: raw YAML parse (via injected _yamlParse; defaults to Bun.YAML.parse)
   // -------------------------------------------------------------------------
   try {
-    const parsed = _yamlParse(raw);
+    const parsed = _yamlParse(normalized);
     if (parsed !== null && typeof parsed === "object" && !Array.isArray(parsed)) {
       return {
         data: parsed as Record<string, unknown>,
@@ -282,7 +292,7 @@ export function parseFrontMatter(raw: string): ParseFrontMatterResult {
   // Tier 2: BC1 escape pre-processor + YAML parse (via injected _yamlParse)
   // -------------------------------------------------------------------------
   try {
-    const preprocessed = preprocess(raw);
+    const preprocessed = preprocess(normalized);
     const parsed = _yamlParse(preprocessed);
     if (parsed !== null && typeof parsed === "object" && !Array.isArray(parsed)) {
       return {
@@ -299,7 +309,7 @@ export function parseFrontMatter(raw: string): ParseFrontMatterResult {
   // -------------------------------------------------------------------------
   // Tier 3: per-field regex fallback
   // -------------------------------------------------------------------------
-  const fields = extractFields(raw);
+  const fields = extractFields(normalized);
   if (Object.keys(fields).length > 0) {
     return {
       data: fields,

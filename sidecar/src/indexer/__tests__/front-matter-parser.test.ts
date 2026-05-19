@@ -548,6 +548,54 @@ describe("extractFields() — Tier 3 per-field regex", () => {
 });
 
 // ---------------------------------------------------------------------------
+// Windows line endings — CRLF regression coverage
+//
+// Durable rule: feedback_path_helpers_normalize_posix.md — normalize at entry.
+// Windows CI checks out files with CRLF (\r\n) line endings when git's
+// autocrlf=true is active (the Windows default). All downstream regex and
+// split("\n") calls are authored for LF-only. parseFrontMatter() normalizes
+// CRLF → LF at entry, protecting every tier from line-ending drift.
+//
+// These tests use raw string literals with \r\n baked in — NOT disk-loaded
+// fixtures, which git checkout settings would normalize on the host machine
+// (making the test vacuous on macOS/Linux). The raw literals reproduce exactly
+// what Windows CI delivers to the parser.
+// ---------------------------------------------------------------------------
+
+describe("Windows line endings — CRLF regression coverage", () => {
+  it("Tier 1 (raw mode) succeeds with CRLF input — simple scalar fields", () => {
+    // Simulates a skill file checked out with CRLF on Windows CI.
+    // Tier 1 must parse the YAML block and produce mode=raw.
+    const crlfRaw = "name: my-skill\r\ndescription: A simple skill.\r\nversion: 1.0.0\r\n";
+    const result = parseFrontMatter(crlfRaw);
+
+    expect(result.mode).toBe("raw");
+    expect(result.data).not.toBeNull();
+    expect(result.data!.name).toBe("my-skill");
+    expect(result.data!.description).toBe("A simple skill.");
+    expect(result.data!.version).toBe("1.0.0");
+    expect(result.warnings).toHaveLength(0);
+  });
+
+  it("Tier 2 (preprocessed mode) succeeds with CRLF input + prose colon in value", () => {
+    // Simulates an agent file containing a colon-space bigram in description,
+    // checked out with CRLF on Windows CI. Without CRLF normalization, the BC1
+    // pre-processor's split("\n") leaves \r at the end of each captured value,
+    // causing the YAML parser to reject the preprocessed block.
+    const crlfWithColon =
+      "name: research-analyst\r\ndescription: Performs research, including: synthesis and analysis\r\nvoice_name: Maya\r\n";
+    const result = parseFrontMatter(crlfWithColon);
+
+    expect(result.mode).toBe("preprocessed");
+    expect(result.data).not.toBeNull();
+    expect(result.data!.name).toBe("research-analyst");
+    expect(result.data!.description as string).toContain("including:");
+    expect(result.data!.voice_name).toBe("Maya");
+    expect(result.warnings).toHaveLength(0);
+  });
+});
+
+// ---------------------------------------------------------------------------
 // Bucket 3: Bun.YAML parity smoke (precomputed canonical fixture)
 //
 // Choice rationale (per Sprint-Programmer Note #6): Rather than adding the
