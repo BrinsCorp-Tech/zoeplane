@@ -15,73 +15,16 @@
  */
 
 import * as React from "react";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import type { AssetSummary } from "@zoeplane/shared-types";
 import { LibraryShell } from "@/components/library-shell/LibraryShell";
 import { AgentCard } from "@/components/agent-card/AgentCard";
 import { fetchAssets } from "@/lib/fetch-assets";
+import { assetNameSearchPredicate } from "@/lib/asset-search";
 import { getSidecarBaseUrl, subscribeSidecarPort } from "@/lib/sidecar-client";
 import { AgentLibraryEmptyState } from "./empty-state";
 import { AgentLibraryErrorState } from "./error-state";
-
-// ---------------------------------------------------------------------------
-// SSE invalidation hook (ADR-009 §5)
-// ---------------------------------------------------------------------------
-
-/**
- * Subscribe to the sidecar SSE /events stream and invalidate the assets cache
- * when a LibraryRefreshEvent with kind='agent' arrives.
- *
- * Reconnects automatically when the sidecar base URL becomes available.
- * Cleans up EventSource on unmount or base URL change.
- */
-function useAgentLibrarySSE(enabled: boolean): void {
-  const queryClient = useQueryClient();
-
-  React.useEffect(() => {
-    if (!enabled) return;
-
-    const baseUrl = getSidecarBaseUrl();
-    if (baseUrl === null) return;
-
-    const es = new EventSource(`${baseUrl}/events`);
-
-    es.addEventListener("message", (event: MessageEvent<string>) => {
-      try {
-        const data: unknown = JSON.parse(event.data);
-        if (
-          typeof data === "object" &&
-          data !== null &&
-          "type" in data &&
-          (data as Record<string, unknown>).type === "library:refresh" &&
-          "kind" in data &&
-          (data as Record<string, unknown>).kind === "agent"
-        ) {
-          // Invalidate agent assets cache (ADR-009 §5)
-          void queryClient.invalidateQueries({ queryKey: ["assets", "agent"] });
-        }
-      } catch {
-        // Ignore malformed SSE messages
-      }
-    });
-
-    return () => {
-      es.close();
-    };
-  }, [enabled, queryClient]);
-}
-
-// ---------------------------------------------------------------------------
-// Search predicate (memoised at module scope — no new reference per render)
-// ---------------------------------------------------------------------------
-
-function agentSearchPredicate(item: AssetSummary, term: string): boolean {
-  const lc = term.toLowerCase();
-  const name = (
-    typeof item.frontMatter?.name === "string" ? item.frontMatter.name : item.name
-  ).toLowerCase();
-  return name.includes(lc);
-}
+import { useLibrarySSE } from "@/hooks/useLibrarySSE";
 
 // ---------------------------------------------------------------------------
 // AgentLibraryView
@@ -118,7 +61,7 @@ export function AgentLibraryView(): React.JSX.Element {
 
   // ── SSE cache invalidation ─────────────────────────────────────────────────
 
-  useAgentLibrarySSE(sidecarReady);
+  useLibrarySSE("agent", sidecarReady);
 
   // ── Derived state ──────────────────────────────────────────────────────────
 
@@ -147,7 +90,7 @@ export function AgentLibraryView(): React.JSX.Element {
       emptyState={<AgentLibraryEmptyState />}
       errorState={<AgentLibraryErrorState onRetry={() => void refetch()} />}
       searchPlaceholder="Search agents…"
-      searchPredicate={agentSearchPredicate}
+      searchPredicate={assetNameSearchPredicate}
     />
   );
 }

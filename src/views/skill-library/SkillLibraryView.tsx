@@ -18,75 +18,16 @@
  */
 
 import * as React from "react";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import type { AssetSummary } from "@zoeplane/shared-types";
 import { LibraryShell } from "@/components/library-shell/LibraryShell";
 import { SkillCard } from "@/components/skill-card/SkillCard";
 import { fetchAssets } from "@/lib/fetch-assets";
+import { assetNameSearchPredicate } from "@/lib/asset-search";
 import { getSidecarBaseUrl, subscribeSidecarPort } from "@/lib/sidecar-client";
 import { SkillLibraryEmptyState } from "./empty-state";
 import { SkillLibraryErrorState } from "./error-state";
-
-// ---------------------------------------------------------------------------
-// SSE invalidation hook (ADR-009 §5)
-// ---------------------------------------------------------------------------
-
-/**
- * Subscribe to the sidecar SSE /events stream and invalidate the assets cache
- * when a LibraryRefreshEvent with kind='skill' arrives.
- *
- * Reconnects automatically when the sidecar base URL becomes available.
- * Cleans up EventSource on unmount or base URL change.
- *
- * IMPORTANT: Only invalidates on event.kind === 'skill' — not on 'agent' or any other kind.
- */
-function useSkillLibrarySSE(enabled: boolean): void {
-  const queryClient = useQueryClient();
-
-  React.useEffect(() => {
-    if (!enabled) return;
-
-    const baseUrl = getSidecarBaseUrl();
-    if (baseUrl === null) return;
-
-    const es = new EventSource(`${baseUrl}/events`);
-
-    es.addEventListener("message", (event: MessageEvent<string>) => {
-      try {
-        const data: unknown = JSON.parse(event.data);
-        if (
-          typeof data === "object" &&
-          data !== null &&
-          "type" in data &&
-          (data as Record<string, unknown>).type === "library:refresh" &&
-          "kind" in data &&
-          (data as Record<string, unknown>).kind === "skill"
-        ) {
-          // Invalidate skill assets cache (ADR-009 §5)
-          void queryClient.invalidateQueries({ queryKey: ["assets", "skill"] });
-        }
-      } catch {
-        // Ignore malformed SSE messages
-      }
-    });
-
-    return () => {
-      es.close();
-    };
-  }, [enabled, queryClient]);
-}
-
-// ---------------------------------------------------------------------------
-// Search predicate (module-scope — stable reference, no new object per render)
-// ---------------------------------------------------------------------------
-
-function skillSearchPredicate(item: AssetSummary, term: string): boolean {
-  const lc = term.toLowerCase();
-  const name = (
-    typeof item.frontMatter?.name === "string" ? item.frontMatter.name : item.name
-  ).toLowerCase();
-  return name.includes(lc);
-}
+import { useLibrarySSE } from "@/hooks/useLibrarySSE";
 
 // ---------------------------------------------------------------------------
 // SkillLibraryView
@@ -123,7 +64,7 @@ export function SkillLibraryView(): React.JSX.Element {
 
   // ── SSE cache invalidation ─────────────────────────────────────────────────
 
-  useSkillLibrarySSE(sidecarReady);
+  useLibrarySSE("skill", sidecarReady);
 
   // ── Derived state ──────────────────────────────────────────────────────────
 
@@ -152,7 +93,7 @@ export function SkillLibraryView(): React.JSX.Element {
       emptyState={<SkillLibraryEmptyState />}
       errorState={<SkillLibraryErrorState onRetry={() => void refetch()} />}
       searchPlaceholder="Search skills…"
-      searchPredicate={skillSearchPredicate}
+      searchPredicate={assetNameSearchPredicate}
     />
   );
 }

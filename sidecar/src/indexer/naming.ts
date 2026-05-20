@@ -20,6 +20,7 @@
 //   workflow  → <root>/workflows/<name>/WORKFLOW.md → name = <name>
 
 import { extname, join } from "node:path";
+import type { ResourceKind } from "@zoeplane/shared-types";
 
 /**
  * Normalize a path string to POSIX "/" separators. Always replaces "\\" with
@@ -36,10 +37,10 @@ function toPosix(p: string): string {
 }
 
 // ---------------------------------------------------------------------------
-// Supported asset kinds (mirrors scanner.ts — keep in sync)
+// Supported asset kinds
 // ---------------------------------------------------------------------------
 
-export type AssetKind = "skill" | "agent" | "command" | "team" | "workflow";
+export type AssetKind = Exclude<ResourceKind, "hook">;
 
 /** Directory name under ~/.claude/ (or <project>/.claude/) for each kind. */
 const KIND_DIR_NAME: Record<AssetKind, string> = {

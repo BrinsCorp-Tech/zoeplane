@@ -35,7 +35,7 @@ import {
 import type { AssetSummary } from "@zoeplane/shared-types";
 import { deriveArchetype } from "./derive-archetype";
 import { isValidVoiceId } from "./is-valid-voice-id";
-import { formatRelativeTime } from "./format-relative-time";
+import { formatRelativeTime } from "@/lib/format-relative-time";
 
 // ---------------------------------------------------------------------------
 // EvaluatorStatusBadge state mapping (UX Design Handoff §EvaluatorStatusBadge)

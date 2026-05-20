@@ -6,17 +6,19 @@
  *   - Cards render with mock asset data
  *   - SSE event triggers query invalidation (mock the SSE stream)
  *   - Error state renders when sidecar 500s
+ *   - reveal_in_finder inline error surfacing (Story 6.13 AC #6 — convergence)
  *
  * Strategy:
  *   - Mock fetch-assets module (no real HTTP calls)
  *   - Mock sidecar-client getSidecarBaseUrl() to return a fixed URL
  *   - Mock Tauri invoke (invoke is not available in JSDOM)
+ *   - Mock Tauri path helpers (invoke is not available in JSDOM)
  *   - Mock EventSource for SSE invalidation tests
  *
- * Story: 6.2
+ * Story: 6.2, 6.13
  */
 
-import { cleanup, render, screen, waitFor, act } from "@testing-library/react";
+import { cleanup, render, screen, waitFor, act, fireEvent } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import type { AssetSummary } from "@zoeplane/shared-types";
@@ -26,8 +28,8 @@ import { AgentLibraryView } from "../AgentLibraryView";
 // Global stubs (must be set before any module imports that reference them)
 // ---------------------------------------------------------------------------
 
-// EventSource is not available in JSDOM — stub it globally so useAgentLibrarySSE
-// does not throw "EventSource is not defined" on mount.
+// EventSource is not available in JSDOM — stub it globally so the SSE-invalidation
+// hook (useLibrarySSE) does not throw "EventSource is not defined" on mount.
 // The captured handler is exposed via `capturedMessageHandler` for SSE tests.
 let capturedMessageHandler: ((e: MessageEvent) => void) | null = null;
 
@@ -79,8 +81,17 @@ vi.mock("@tauri-apps/api/core", () => ({
   invoke: vi.fn().mockResolvedValue(undefined),
 }));
 
+// Mock Tauri path helpers (not available in JSDOM)
+vi.mock("@tauri-apps/api/path", () => ({
+  homeDir: vi.fn().mockResolvedValue("/Users/testuser"),
+  join: vi.fn((...parts: string[]) => Promise.resolve(parts.join("/"))),
+}));
+
 import { fetchAssets } from "@/lib/fetch-assets";
 const mockFetchAssets = vi.mocked(fetchAssets);
+
+import { invoke } from "@tauri-apps/api/core";
+const mockInvoke = vi.mocked(invoke);
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -320,6 +331,72 @@ describe("AgentLibraryView", () => {
     await waitFor(() => {
       expect(screen.queryByText("Sprint Programmer")).toBeNull();
       expect(screen.getByText(/Research Analyst/i)).toBeDefined();
+    });
+  });
+
+  // ── reveal_in_finder error surfacing (Story 6.13 AC #6 — convergence) ───────
+  // Agent variants previously swallowed reveal failures silently. After Story 6.13
+  // they share LibraryEmptyPanel / LibraryErrorPanel which surface inline alerts.
+
+  it("shows inline error message when reveal_in_finder fails from empty state", async () => {
+    mockFetchAssets.mockResolvedValueOnce(makeEmptyResponse());
+    mockInvoke.mockRejectedValueOnce(new Error("file_not_found"));
+
+    renderWithQuery(<AgentLibraryView />);
+
+    await waitFor(() => {
+      expect(screen.getByRole("button", { name: /Open.*agents.*Finder/i })).toBeDefined();
+    });
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: /Open.*agents.*Finder/i }));
+    });
+
+    await waitFor(() => {
+      expect(
+        screen.getByText("Couldn't open ~/.claude/agents/ — directory may not exist yet."),
+      ).toBeDefined();
+    });
+  });
+
+  it("inline error message in empty state has aria-live='polite'", async () => {
+    mockFetchAssets.mockResolvedValueOnce(makeEmptyResponse());
+    mockInvoke.mockRejectedValueOnce(new Error("file_not_found"));
+
+    renderWithQuery(<AgentLibraryView />);
+
+    await waitFor(() => {
+      expect(screen.getByRole("button", { name: /Open.*agents.*Finder/i })).toBeDefined();
+    });
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: /Open.*agents.*Finder/i }));
+    });
+
+    await waitFor(() => {
+      const alert = screen.getByRole("alert");
+      expect(alert.getAttribute("aria-live")).toBe("polite");
+    });
+  });
+
+  it("does NOT show inline error message when reveal_in_finder succeeds from empty state", async () => {
+    mockFetchAssets.mockResolvedValueOnce(makeEmptyResponse());
+    mockInvoke.mockResolvedValueOnce(undefined);
+
+    renderWithQuery(<AgentLibraryView />);
+
+    await waitFor(() => {
+      expect(screen.getByRole("button", { name: /Open.*agents.*Finder/i })).toBeDefined();
+    });
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: /Open.*agents.*Finder/i }));
+    });
+
+    await waitFor(() => {
+      expect(
+        screen.queryByText("Couldn't open ~/.claude/agents/ — directory may not exist yet."),
+      ).toBeNull();
     });
   });
 
