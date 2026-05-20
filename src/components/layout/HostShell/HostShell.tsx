@@ -82,9 +82,20 @@ export function HostShell({ children, className }: HostShellProps): React.ReactE
   const primaryContent: React.ReactNode = React.useMemo(() => {
     if (children !== undefined) return children;
 
+    // Stories 6.2/6.3: Library views render global-scope assets
+    // (~/.claude/agents, ~/.claude/skills) — they do NOT require a project
+    // to be open. Route them BEFORE the project-null gate.
+    if (activeItemId === "agents") {
+      return <AgentLibraryView />;
+    }
+
+    if (activeItemId === "skills") {
+      return <SkillLibraryView />;
+    }
+
     if (project === null) {
-      // AC #5 / Risk note: no functional picker exists in Sprint 2.
-      // Render a centered placeholder only — Epic 03 wires the actual picker.
+      // No nav item selected AND no project open — show the empty state.
+      // Epic 03 wires a functional project picker; Sprint 2 ships placeholder only.
       return (
         <div
           style={{
@@ -113,25 +124,13 @@ export function HostShell({ children, className }: HostShellProps): React.ReactE
               margin: 0,
             }}
           >
-            Open a project to get started
+            Open a project — or click Agents / Skills in the sidebar to browse global libraries.
           </p>
         </div>
       );
     }
 
-    // Project is open — render the active library view if a nav item is selected.
-    // Stories 6.2/6.3: Agents and Skills library views are wired here (Sprint 5).
-    // Other nav item IDs fall through to the Epic 03 placeholder until those
-    // views are shipped.
-    if (activeItemId === "agents") {
-      return <AgentLibraryView />;
-    }
-
-    if (activeItemId === "skills") {
-      return <SkillLibraryView />;
-    }
-
-    // Fallback: Epic 03 placeholder — unmapped nav item or no item selected.
+    // Project open + unmapped nav item → Epic 03 placeholder.
     return (
       <div
         style={{

@@ -181,9 +181,11 @@ describe("HostShell — structural accessibility (Story 2.8 AC #9)", () => {
       expect(main.textContent).toContain("No project open");
     });
 
-    it("renders 'Open a project to get started' subtext when projectRoot is null", () => {
+    it("renders the open-project subtext with library hint when projectRoot is null", () => {
       render(<HostShell />);
-      expect(screen.getByText("Open a project to get started")).toBeDefined();
+      expect(
+        screen.getByText(/Open a project — or click Agents \/ Skills in the sidebar/),
+      ).toBeDefined();
     });
   });
 
@@ -209,7 +211,7 @@ describe("HostShell — structural accessibility (Story 2.8 AC #9)", () => {
       // that is correct. We only verify the HostShell empty-state heading
       // (which lives inside <main>) is absent from the main region.
       const main = screen.getByRole("main");
-      expect(main.textContent).not.toContain("Open a project to get started");
+      expect(main.textContent).not.toContain("Open a project");
     });
   });
 
@@ -257,20 +259,18 @@ describe("HostShell — structural accessibility (Story 2.8 AC #9)", () => {
       expect(screen.getByRole("region", { name: "Skills library" })).toBeDefined();
     });
 
-    it("does NOT render AgentLibraryView when project is null (empty-state wins)", () => {
-      // project === null branch short-circuits before nav routing
+    it("renders AgentLibraryView when project is null (global-scope library bypasses project gate)", () => {
+      // Library views show global-scope assets (~/.claude/agents) and do NOT
+      // require a project to be open. Routing must happen before the project-null gate.
       useActiveNav.setState({ activeItemId: "agents" });
-      render(<HostShell />);
-      expect(screen.queryByRole("region", { name: "Agents library" })).toBeNull();
-      // "No project open" appears in PrimaryWorkArea + StatusBar — assert presence
-      expect(screen.getAllByText("No project open").length).toBeGreaterThan(0);
+      renderWithQuery(<HostShell />);
+      expect(screen.getByRole("region", { name: "Agents library" })).toBeDefined();
     });
 
-    it("does NOT render SkillLibraryView when project is null (empty-state wins)", () => {
+    it("renders SkillLibraryView when project is null (global-scope library bypasses project gate)", () => {
       useActiveNav.setState({ activeItemId: "skills" });
-      render(<HostShell />);
-      expect(screen.queryByRole("region", { name: "Skills library" })).toBeNull();
-      expect(screen.getAllByText("No project open").length).toBeGreaterThan(0);
+      renderWithQuery(<HostShell />);
+      expect(screen.getByRole("region", { name: "Skills library" })).toBeDefined();
     });
 
     it("renders placeholder when activeItemId is null with project open", () => {
