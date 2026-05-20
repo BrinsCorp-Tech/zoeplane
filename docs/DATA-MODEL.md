@@ -31,11 +31,11 @@ The database path is resolved by the Tauri shell at spawn time using `app.path()
 
 ## Schema
 
-### Sprint 1 Tables
+Four migrations have been applied. Migration files live at `sidecar/src/db/migrations/`. The highest-numbered migration applied is `004_indexes.sql` (Sprint 5).
 
-#### `__migrations`
+### Migration 001 — `__migrations` tracking table (Sprint 1)
 
-The migration tracking table, bootstrapped by the migration runner before any migration files are applied. Idempotent (`CREATE TABLE IF NOT EXISTS`).
+Bootstrapped by the migration runner before any migration files are applied. Idempotent (`CREATE TABLE IF NOT EXISTS`).
 
 ```sql
 CREATE TABLE IF NOT EXISTS __migrations (
@@ -47,16 +47,112 @@ CREATE TABLE IF NOT EXISTS __migrations (
 
 Source: `sidecar/src/db/migrations/001_init.sql`.
 
-This is the only table created in Sprint 1. Domain tables (asset index, evaluator results, preferences) are defined in later epics.
+### Migration 002 — Asset index tables (Sprint 3, Story 3.1)
+
+Seven domain tables for the FS-watched asset index. All integer timestamps are Unix epoch milliseconds. All seven tables carry FR-068 sync-friendly fields (`workspace_id`, `author_id`, `visibility`, `created_at`, `updated_at`, `deleted_at`) for eventual multi-workspace support. Source: `sidecar/src/db/migrations/002_asset_index.sql`.
+
+#### `assets`
+
+One row per indexed skill / agent / command / team / workflow. Primary writer: `sidecar/src/indexer/scanner.ts` (cold-launch scan) and `indexer/event-router.ts` (watcher-triggered upserts).
+
+Key columns:
+
+| Column | Type | Notes |
+|---|---|---|
+| `id` | TEXT PK | UUID v4 |
+| `kind` | TEXT | CHECK: `skill\|agent\|command\|team\|workflow` |
+| `name` | TEXT | Asset name (filename stem) |
+| `scope` | TEXT | CHECK: `global\|project\|local` |
+| `project_id` | TEXT | NULL for global scope; NOT NULL for project/local |
+| `source_path` | TEXT | Absolute path to the `.md` file |
+| `validation_status` | TEXT | CHECK: `valid\|warnings\|invalid` |
+| `shadowed_by_project_id` | TEXT | NULL = active; non-NULL = this global row is shadowed by a project-scoped row (FR-074) |
+| `front_matter_json` | TEXT | Parsed YAML front-matter as JSON string; NULL on parse failure; Story 3.5 is writer |
+| `body_excerpt` | TEXT | First ~500 chars of markdown body |
+| `last_modified_at` | INTEGER | Unix epoch ms |
+| `last_modified_by` | TEXT | CHECK: `in_app\|external` |
+| `deleted_at` | INTEGER | NULL = active; soft-delete tombstone |
+
+**FR-074 overlay indexes**: Two partial UNIQUE indexes enforce at-most-one row per `(kind, name, scope, project_id)`:
+
+```sql
+CREATE UNIQUE INDEX uq_assets_overlay
+    ON assets (kind, name, scope, project_id)
+    WHERE project_id IS NOT NULL;
+
+CREATE UNIQUE INDEX uq_assets_overlay_global
+    ON assets (kind, name, scope)
+    WHERE project_id IS NULL;
+```
+
+SQLite treats two NULLs as distinct in a standard UNIQUE index; the `WHERE project_id IS NULL` partial index closes that gap for global-scope rows. Source: `002_asset_index.sql`.
+
+**Scope coherence constraint** (table-level CHECK):
+
+```sql
+CHECK (
+    (scope = 'global' AND project_id IS NULL) OR
+    (scope IN ('project', 'local') AND project_id IS NOT NULL)
+)
+```
+
+#### `asset_provenance`
+
+Provenance metadata for imported assets. Epic 05 (Skill Safety Evaluator) is the primary writer; v1 rows are structural-only (most fields NULL/empty until Epic 05 ships).
+
+Key columns: `asset_id` (FK to `assets.id`, not enforced by SQLite constraint), `source_url`, `source_hash` (SHA-256 hex), `imported_at`, `evaluator_report_id` (NULL in v1), `last_evaluated_at` (NULL in v1).
+
+#### `hook_index`
+
+One row per discovered hook entry from `~/.claude/settings.json` and per-project settings files. Business key: `hook_id` (SHA-256 of `(scope, event, matcher, command)`). Epic 09 (Strict-Mode flow) populates `quarantine_reason`.
+
+Key columns: `hook_id` (SHA-256 business key, UNIQUE), `scope`, `source_path`, `event`, `matcher`, `command`, `disabled`, `quarantine_reason`, `user_disabled`.
+
+Non-unique index on `scope` for Library-view scope filtering.
+
+#### `projects`
+
+One row per tracked project path (app-derived state). Key columns: `path`, `display_name`, `last_opened_at`.
+
+#### `recent_files`
+
+Per-project file history. Key columns: `project_id` (FK to `projects.id`), `path`, `last_opened_at`, `pin_order` (NULL = not pinned; lower integer = higher priority).
+
+#### `route_stacks`
+
+Per-tab navigation session restore. Key columns: `tab_id`, `stack_json` (JSON array), `active_index`.
+
+#### `window_layouts`
+
+Host-shell layout persistence. Key columns: `layout_name`, `layout_json` (JSON descriptor).
+
+### Migration 003 — `user_preferences` (Sprint 4, Story 3.7)
+
+Flat key-value store for app-level user state. Intentionally omits FR-068 sync-friendly fields (user preferences are machine-local, not workspace-shared). Source: `sidecar/src/db/migrations/003_user_prefs.sql`.
+
+```sql
+CREATE TABLE user_preferences (
+    key        TEXT    NOT NULL PRIMARY KEY,
+    value      TEXT    NOT NULL,
+    updated_at INTEGER NOT NULL  -- Unix epoch ms
+);
+```
+
+### Migration 004 — Performance indexes (Sprint 5, Story 6.2 — CR-4 paydown)
+
+Adds the `idx_asset_provenance_asset_id` index required by the `GET /assets` LEFT JOIN (ADR-009 §3). This index was identified as a carryover (CR-4) in Sprint 3 and shipped when Story 6.2 became its first consumer. Source: `sidecar/src/db/migrations/004_indexes.sql`.
+
+```sql
+CREATE INDEX IF NOT EXISTS idx_asset_provenance_asset_id
+    ON asset_provenance (asset_id);
+```
 
 ### Planned Tables (Future Epics)
 
-| Table              | Target epic | Purpose                                                               |
-| ------------------ | ----------- | --------------------------------------------------------------------- |
-| Asset index tables | Epic 03     | FS-watched index of skills, agents, commands, teams, workflows, hooks |
-| Evaluator results  | Epic 05     | Skill Safety Evaluator verdicts per resource + version                |
-| User preferences   | Epic 02     | Theme, sidebar state, command palette history                         |
-| Plugin storage     | Epic 04     | Scoped key-value storage per plugin                                   |
+| Table | Target epic | Purpose |
+|---|---|---|
+| `evaluator_reports` | Epic 05 | Skill Safety Evaluator verdicts per resource + version |
+| Plugin storage | Epic 04 | Scoped key-value storage per plugin |
 
 ## Migration Philosophy
 
@@ -74,7 +170,7 @@ Source: `sidecar/src/db/runner.ts:1-244`.
 
 ## Query Patterns
 
-In Sprint 1 the only queries are migration bookkeeping:
+### Migration bookkeeping
 
 ```sql
 -- Check which migrations have been applied
@@ -84,8 +180,61 @@ SELECT version FROM __migrations ORDER BY version ASC;
 INSERT INTO __migrations (version, name, applied_at) VALUES (?, ?, ?);
 ```
 
-Domain queries (asset lookup, evaluator result reads, preference reads/writes) are defined in later epics.
+### Library asset query (GET /assets — ADR-009 §3)
+
+The primary read query executed by `sidecar/src/routes/assets.ts::handleGetAssets()`. Parameters are bound dynamically based on the `kind`, `scope`, and `projectId` query params. `LIMIT 501` detects the 500-row soft cap without an additional COUNT query.
+
+```sql
+SELECT
+  a.id, a.kind, a.name, a.scope, a.project_id,
+  a.source_path, a.validation_status,
+  a.last_modified_at, a.last_modified_by,
+  a.front_matter_json, a.body_excerpt,
+  p.id           AS provenance_id,
+  p.source_url   AS provenance_source_url,
+  p.source_hash  AS provenance_source_hash,
+  p.imported_at  AS provenance_imported_at,
+  p.evaluator_report_id AS provenance_evaluator_report_id,
+  p.last_evaluated_at   AS provenance_last_evaluated_at
+FROM assets a
+LEFT JOIN asset_provenance p
+  ON p.asset_id = a.id
+  AND p.deleted_at IS NULL
+WHERE a.deleted_at IS NULL
+  AND a.shadowed_by_project_id IS NULL
+  AND a.kind = ?
+  [AND a.scope = ?]          -- optional
+  [AND a.project_id = ?]     -- optional
+ORDER BY a.kind ASC, a.scope ASC, a.name ASC
+LIMIT 501
+```
+
+The `idx_asset_provenance_asset_id` index (`migration 004`) is required for this LEFT JOIN to avoid a full table scan on `asset_provenance`.
+
+### User preference read/write (Epic 03, Story 3.7)
+
+```sql
+-- Read a preference value
+SELECT value FROM user_preferences WHERE key = ?;
+
+-- Upsert a preference value
+INSERT INTO user_preferences (key, value, updated_at)
+  VALUES (?, ?, ?)
+  ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at;
+```
+
+### Project soft-delete (Epic 03, Story 3.7)
+
+When a project is removed via `POST /projects/:id/remove`, associated rows are tombstoned in a single transaction:
+
+```sql
+UPDATE assets       SET deleted_at = ? WHERE project_id = ? AND deleted_at IS NULL;
+UPDATE hook_index   SET deleted_at = ? WHERE scope LIKE 'project:%' AND ...;
+UPDATE route_stacks SET deleted_at = ? WHERE ... ;
+UPDATE recent_files SET deleted_at = ? WHERE project_id = ?;
+UPDATE projects     SET deleted_at = ? WHERE id = ?;
+```
 
 ---
 
-_Last reviewed: 2026-05-09 by tech-writer agent against Sprint 1._
+_Last reviewed: 2026-05-20 by tech-writer agent (Sprint 3 schema introduction + Sprint 4 user_preferences + Sprint 5 CR-4 performance index)._

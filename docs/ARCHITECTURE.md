@@ -12,7 +12,7 @@ The project is Apache 2.0 OSS steered by BrinsCorp-Tech. Proprietary capabilitie
 ZoePlane/
 ├── src/                        React UI (Vite-bundled, served in Tauri WebView)
 │   ├── main.tsx                Entry point; ThemeProvider + QueryClientProvider tree
-│   ├── App.tsx                 Root component; mounts HostShell
+│   ├── App.tsx                 Root component; mounts HostShell; calls initSidecarClient()
 │   ├── components/
 │   │   ├── theme/
 │   │   │   └── ThemeProvider.tsx   Theme preference manager + useTheme() hook
@@ -44,12 +44,41 @@ ZoePlane/
 │   │   │   ├── TabStrip/       TabStrip (Zustand-managed tabs)
 │   │   │   ├── PrimaryWorkArea/ PrimaryWorkArea (flex: 1, scrollable content host)
 │   │   │   ├── CommandPalette/ CommandPalette (Cmd+K palette, Radix Dialog portal)
-│   │   │   ├── NotificationsCenter/ NotificationsCenter (right-edge dialog portal)
+│   │   │   ├── NotificationsCenter/ NotificationsCenter (right-edge dialog portal, 7 time-bucket labels)
 │   │   │   └── CollapsiblePane/ Cross-cutting collapse primitive (used by Sidebar + Inspector)
-│   │   └── library-shell/
-│   │       └── LibraryShell.tsx  Cross-library card-grid primitive
+│   │   ├── library-shell/
+│   │   │   ├── LibraryShell.tsx    Cross-library card-grid primitive
+│   │   │   └── LibraryStatePanel.tsx  Shared empty/error/loading state primitive (FR-010/FR-002)
+│   │   ├── agent-card/
+│   │   │   ├── AgentCard.tsx       Agent Library card (voice ID, archetype, trait composition — FR-010)
+│   │   │   ├── derive-archetype.ts Agent archetype derivation from front-matter
+│   │   │   └── is-valid-voice-id.ts Voice ID validation helper
+│   │   └── skill-card/
+│   │       ├── SkillCard.tsx       Skill Library card (description, scope, validation badge — FR-002)
+│   │       └── derive-plugin-source.ts  Plugin source derivation from provenance
+│   ├── views/
+│   │   ├── agent-library/
+│   │   │   ├── AgentLibraryView.tsx  Agent Library view (TanStack Query + useLibrarySSE)
+│   │   │   ├── empty-state.tsx       Agent Library empty-state panel
+│   │   │   └── error-state.tsx       Agent Library error-state panel
+│   │   └── skill-library/
+│   │       ├── SkillLibraryView.tsx  Skill Library view (TanStack Query + useLibrarySSE)
+│   │       ├── empty-state.tsx       Skill Library empty-state panel
+│   │       └── error-state.tsx       Skill Library error-state panel
+│   ├── hooks/
+│   │   ├── useLibrarySSE.ts    Shared SSE invalidation hook for library views (ADR-009 §5)
+│   │   ├── useCommandPalette.ts
+│   │   ├── useNotification.ts
+│   │   └── useProject.ts
+│   ├── lib/
+│   │   ├── sidecar-client.ts   Sidecar port subscriber + initSidecarClient() (ADR-009)
+│   │   ├── fetch-assets.ts     Typed HTTP client for GET /assets (ADR-009)
+│   │   ├── asset-search.ts     assetNameSearchPredicate — client-side fuzzy filter
+│   │   ├── format-relative-time.ts  Relative time formatter (hoisted from agent-card/ — Story 6.15)
+│   │   └── utils.ts            Shared utility functions
 │   ├── stores/
 │   │   ├── app.ts              Zustand: shell readiness + projectRoot + TabStrip slices
+│   │   ├── active-nav.ts       Zustand: active Sidebar nav item (useActiveNav)
 │   │   ├── notifications.ts    Zustand: notification queue
 │   │   └── commandPalette.ts   Zustand: palette open/closed state + query
 │   ├── styles/
@@ -69,14 +98,21 @@ ZoePlane/
 │   ├── capabilities/default.json  Tauri 2.x capability grants (ADR-002)
 │   └── tauri.conf.json         Bundle identifier, window config, plugin config
 ├── sidecar/                    Node.js sidecar (bun-compiled single-binary)
-│   ├── src/index.ts            HTTP loopback server + DB init + signal handlers
+│   ├── src/index.ts            HTTP loopback server + DB init + CORS + signal handlers
 │   ├── src/log.ts              Structured JSON stderr logger
+│   ├── src/routes/
+│   │   └── assets.ts           GET /assets handler (ADR-009 §1–§6)
+│   ├── src/indexer/            FS watcher, cold-launch scanner, validator, hook discovery, event router
 │   └── src/db/
 │       ├── runner.ts           SQLite migration runner
-│       └── migrations/         Ordered .sql migration files
+│       └── migrations/         Ordered .sql migration files (001–004)
 ├── packages/
 │   ├── plugin-sdk/             @zoeplane/plugin-sdk (Apache 2.0, published to npm)
 │   ├── shared-types/           @zoeplane/shared-types (private monorepo package)
+│   │   └── src/
+│   │       ├── watcher.ts      SSE event types + channel-name constants (Epic 03)
+│   │       ├── epic-03.ts      Epic 03 locked IPC barrel (ADR-007)
+│   │       └── epic-06.ts      Epic 06 locked types: AssetsResponse, AssetSummary, AssetProvenanceSummary (ADR-009)
 │   └── design-tokens/          DTCG JSON → Style Dictionary v4 pipeline
 │       ├── src/tokens.seed.json    DTCG W3C v1 primitive + motion token source
 │       └── style-dictionary.config.mjs  Custom zoeplaneTokensCSS formatter
@@ -87,11 +123,17 @@ ZoePlane/
 
 ## Component Responsibilities
 
-**Tauri Rust shell (`src-tauri/`)** owns the OS layer. It spawns and supervises the sidecar process, registers the `zoeplane://` deep-link URL scheme with the host OS, enforces the filesystem allowlist on all file operations, manages the application window, and bridges the React UI to sidecar services via typed Tauri IPC commands. It never delegates OS-level operations to JavaScript. The Tauri shell is the sole process that speaks to the OS; the React UI and sidecar speak only to the Tauri shell.
+**Tauri Rust shell (`src-tauri/`)** owns the OS layer. It spawns and supervises the sidecar process, registers the `zoeplane://` deep-link URL scheme with the host OS, enforces the filesystem allowlist on all file operations, manages the application window, and bridges the React UI to sidecar services via typed Tauri IPC commands. It never delegates OS-level operations to JavaScript. The Tauri shell is the sole process that speaks to the OS; the React UI and sidecar speak only to the Tauri shell for mutation operations and OS-level commands.
 
-**Node.js sidecar (`sidecar/`)** is a bun-compiled single-binary process that the Tauri shell spawns at startup. It hosts an HTTP loopback server on `127.0.0.1` at a kernel-assigned ephemeral port, runs the SQLite migration runner, and announces its port to the Tauri shell via a single-line JSON on stdout (`{"port": N}`). Future epics extend it to host Path A (Direct Claude SDK calls), Path B (CLI harness wrapping `claude` and `codex`), the Skill Safety Evaluator, and the FS watcher/asset indexer. The sidecar writes structured JSON to stderr; the Tauri shell forwards these lines to its own tracing output.
+**Node.js sidecar (`sidecar/`)** is a bun-compiled single-binary process that the Tauri shell spawns at startup. It hosts an HTTP loopback server on `127.0.0.1` at a kernel-assigned ephemeral port, runs the SQLite migration runner, and announces its port to the Tauri shell via a single-line JSON on stdout (`{"port": N}`). The sidecar hosts the FS watcher and asset indexer (`src/indexer/`), Path A (Direct Claude SDK calls), Path B (CLI harness wrapping `claude` and `codex`), and the Skill Safety Evaluator. It exposes the following HTTP endpoints (all bound to `127.0.0.1`, CORS-enabled for the Tauri WebView origin): `GET /health`, `GET /events` (SSE stream — ADR-005), `GET /assets` (asset query — ADR-009), `GET /projects/:id`, `POST /projects`, `POST /projects/:id/remove`, `POST /watcher/project/open`, `POST /watcher/project/close`, and Epic 03 state-management routes. The sidecar writes structured JSON to stderr; the Tauri shell forwards these lines to its own tracing output.
 
-**React UI (`src/`)** is a Vite-bundled React 18 / TypeScript / Tailwind v4 application rendered in Tauri's WebView. The UI communicates exclusively with the Tauri shell via `invoke()` — it never makes direct HTTP calls to the sidecar or raw filesystem calls. Sprint 2 delivered the complete design system layer: design tokens pipeline, 16 foundation components, 9 layout regions, the HostShell composition root, and Zustand state stores.
+**React UI (`src/`)** is a Vite-bundled React 18 / TypeScript / Tailwind v4 application rendered in Tauri's WebView. The UI uses two distinct communication paths to reach sidecar services:
+
+1. **Tauri IPC (`invoke()`)** — the exclusive path for filesystem operations (`fs_read_file`, `fs_write_file`, `fs_read_dir`, `fs_exists`), Tauri-OS operations (`sidecar_status`, `ping`), and Epic 03 project-management commands (`switch_project`, `add_project`, `remove_project`, etc.). These route through the Rust shell, which enforces FS allowlist checks and OS-level permission gating.
+
+2. **Direct sidecar HTTP** — introduced in Sprint 5 per **ADR-009**. The UI makes direct `fetch()` calls to the sidecar's `GET /assets` endpoint and subscribes to the `GET /events` SSE stream for live library invalidation. This path is restricted to read-only data queries; write operations remain on the Tauri IPC path. The rationale (per ADR-009): direct fetch eliminates Tauri IPC serialization overhead on per-refresh library queries (~500 assets × 2 views), and the SSE consumer pattern (`useLibrarySSE`) requires a persistent connection that the IPC bridge does not support. The sidecar remains bound to `127.0.0.1` — the loopback restriction is the security boundary.
+
+Sprint 2 delivered the complete design system layer: design tokens pipeline, 16 foundation components, 9 layout regions, the HostShell composition root, and Zustand state stores. Sprint 5 delivered the first user-visible product surfaces: Agent Library and Skill Library views (FR-010 + FR-002), the sidecar asset-query route (`/assets`), and the shared library infrastructure (`useLibrarySSE`, `LibraryStatePanel`, `assetNameSearchPredicate`).
 
 **Design system layer** consists of three integrated subsystems introduced in Sprint 2 per **ADR-004**:
 
@@ -153,10 +195,11 @@ Additional theme-invariant layers: `tokens.typography` (fluid type scale via `cl
 1. Tauri shell launches, initializes tracing, and calls `spawn_sidecar()` (`src-tauri/src/lib.rs:169`).
 2. Tauri shell resolves `app_data_dir()` using the bundle identifier `com.brinscorp.zoeplane` and passes `--db-path <path>` and `--migrations-dir <path>` to the sidecar at spawn.
 3. Sidecar opens SQLite at the provided path, runs the migration runner (`sidecar/src/db/runner.ts`), starts the HTTP loopback server on port 0, and writes `{"port": N}` to stdout.
-4. Tauri shell captures the port announcement, stores it in `SidecarPort` app state (`lib.rs:302-311`), and emits the `sidecar-ready` event to the UI.
-5. React UI listens for `sidecar-ready` and can begin issuing IPC requests.
+4. Tauri shell captures the port announcement, stores it in `SidecarPort` app state, and emits the `sidecar-ready` event to the UI.
+5. React UI's `App.tsx` calls `initSidecarClient()` on mount. This registers a `sidecar-ready` event listener and starts an IPC fallback poll (`sidecar_status` every 500 ms) to close a pub/sub race where the event fires before React mounts. Source: `src/lib/sidecar-client.ts`.
+6. Once `_sidecarPort` is populated, `getSidecarBaseUrl()` returns a non-null URL and all `useQuery` hooks with `enabled: sidecarUrl !== null` become active.
 
-**Typical health-check request:**
+**Typical health-check request (Tauri IPC path):**
 
 ```
 React UI
@@ -168,7 +211,7 @@ React UI
   ← SidecarStatus { running: true, pid: N }
 ```
 
-**FS read request (FB-016 enforcement):**
+**FS read request (FB-016 enforcement — Tauri IPC path):**
 
 ```
 React UI
@@ -177,6 +220,26 @@ React UI
       fs_scope().is_allowed(path)?
       if denied → log_violation (ERROR, "fs-allowlist" target) → return Err
       if allowed → std::fs::read(path) → return Ok(bytes)
+```
+
+**Library asset fetch (direct HTTP path — ADR-009):**
+
+```
+React UI (AgentLibraryView / SkillLibraryView)
+  → fetch(`http://127.0.0.1:{port}/assets?kind=agent&scope=global`)
+  → sidecar: routes/assets.ts::handleGetAssets()
+      validates kind + scope query params
+      → bun:sqlite LEFT JOIN: assets + asset_provenance WHERE deleted_at IS NULL
+      ← { assets: AssetSummary[], truncated: boolean, totalCount: number }
+  ← React re-renders card grid via TanStack Query
+
+SSE invalidation path (runs concurrently with library views):
+  React UI
+    → new EventSource(`http://127.0.0.1:{port}/events`)
+    ← sidecar emits: data: {"type":"library:refresh","kind":"agent",...}\n\n
+    → useLibrarySSE("agent") receives message
+    → queryClient.invalidateQueries({ queryKey: ["assets", "agent"] })
+    → TanStack Query refetches from GET /assets
 ```
 
 ## Persistence and State
@@ -260,7 +323,11 @@ See `docs/architecture/decisions/README.md` for the full ADR index.
 - **ADR-002** — Adopts Tauri 2.x's capability model in full, with four invariants: single capability file at `src-tauri/capabilities/default.json` for Sprint 1; enumerate every permission (no blanket `<plugin>:default` where the surface exceeds need); sidecar grants live in `capabilities/default.json`, never in `tauri.conf.json`; hard separation between plugin configuration (`tauri.conf.json`) and plugin permissions (capability files). See section above and ADR-002 for full rationale. Note: invariant 4 is partially superseded by ADR-003.
 - **ADR-003** — Formalizes the three-way Tauri 2.x scope model (plugin configuration / capability permissions / plugin runtime scope state) and mandates programmatic population of `app.fs_scope()` at app setup. Establishes that capability `fs:scope` entries do not populate the runtime scope, and that custom Rust IPC wrappers must use the runtime scope for defense-in-depth. See "Three-way Tauri 2.x scope model" section above.
 - **ADR-004** — Design System Architecture. Locks five invariants: DTCG W3C v1 three-tier cascade (primitives → semantic → component); OKLCH primitive color space with HSL fallback as contingency only; Style Dictionary v4 as the sole token build tool; shadcn/ui as the component scaffold (not a dependency — copied-and-owned); Storybook 8 as the component development environment (Chromatic was removed in Sprint 3 — see ADR-006). Establishes the no-theme-branch-in-component rule (verified by guard test) and requires semantic equivalence proof for any migration between hand-authored and generated `tokens.css`. See "Design System Architecture" section above.
+- **ADR-005** — Watcher Layer and Implementation Pattern. Locks the sidecar Bun/chokidar v5 path over the Rust `notify` path for the FS watcher service. Rationale: acceptable IPC latency for asset indexing, chokidar handles macOS atomic-write edge cases (and symlinked watch roots with `followSymlinks: true`), smaller surface than a new Rust module + tokio dependency. Single-watcher-multiple-roots pattern avoids `kern.maxfiles` exhaustion at scale. See `docs/architecture/decisions/ADR-005-watcher-layer-and-pattern.md`.
 - **ADR-006** — Visual Coverage Posture. Removes Chromatic and locks the visual-regression approach: manual smoke at component-batch boundaries (primary gate) + `@storybook/addon-a11y` panel + `src/test/helpers/runAxe.ts` (automated a11y surface). Posture revisited at 3 active maintainers. See `docs/architecture/decisions/ADR-006-visual-coverage-posture.md`.
+- **ADR-007** — Epic 03 IPC Contract. Locks the Epic 03 IPC surface (7 Tauri commands + SSE event types) as a SemVer-committed contract through v1.0.0. Normalizes all seven commands to `Result<CommandResponse, String>` where the `Err` branch is structurally unreachable (error conditions encoded in `CommandResponse`). Establishes `packages/shared-types/src/epic-03.ts` as the canonical barrel. See `docs/architecture/decisions/ADR-007-epic-03-ipc-contract.md`.
+- **ADR-008** — Front-Matter Parsing Strategy. Locks the three-tier parser: (1) raw `Bun.YAML.parse` for well-formed YAML; (2) escape pre-processor matching Claude Code's BC1 pattern (handles unquoted prose with colons and `**Term**:` markdown); (3) per-field line-level extraction as a fallback. Pins parser behavior to `Bun.YAML.parse`. Rationale: 14/14 of the operator's agent files at `~/.claude/agents/*.md` fail under strict gray-matter YAML — Claude Code is the compatibility target, not PAI. See `docs/architecture/decisions/ADR-008-front-matter-parsing-strategy.md`.
+- **ADR-009** — Sidecar `/assets` HTTP Query Surface. **This ADR formally retires the prior "UI never speaks to sidecar directly" rule for read-only data queries.** Locks `GET /assets?kind=&scope=&projectId=&include=` as the single sidecar query primitive for Epic 06 Library views. The React UI now makes direct `fetch()` calls to this endpoint, bypassing the Tauri IPC bridge. Rationale: direct fetch eliminates IPC serialization overhead on per-refresh library queries and enables the SSE consumer pattern (`useLibrarySSE`) that the IPC bridge cannot support. Write operations and FS/OS commands remain on the Tauri IPC path. Contract locked at SemVer through v1.0.0 (inherits ADR-007 policy). See `docs/architecture/decisions/ADR-009-sidecar-assets-http-query-surface.md`.
 
 ## Glossary
 
@@ -268,7 +335,7 @@ See `docs/architecture/decisions/README.md` for the full ADR index.
 
 **FS allowlist** — The set of filesystem paths the Tauri app is permitted to access. In production: `$HOME/.claude/**`, `$APPDATA/com.brinscorp.zoeplane/**`, and `$APP/**`. Method-level permissions are granted in `src-tauri/capabilities/default.json`; path scope is enforced by both the capability ACL and the runtime `app.fs_scope()` state per ADR-003. All filesystem operations route through `commands/fs.rs` wrappers that enforce this allowlist and log violations.
 
-**IPC** — Inter-process communication. ZoePlane uses two IPC layers: (1) Tauri commands (`invoke()`) between React UI and Rust shell, and (2) HTTP loopback on `127.0.0.1` between the Rust shell and the sidecar.
+**IPC** — Inter-process communication. ZoePlane uses two IPC layers: (1) Tauri commands (`invoke()`) between React UI and Rust shell, used for FS operations, OS-level commands, and Epic 03 project-management commands; and (2) HTTP loopback on `127.0.0.1` between the React UI and the sidecar (direct fetch for library data queries and SSE — per ADR-009) and between the Rust shell and the sidecar (health-check, internal relay).
 
 **Path A / Path B** — Two modes for invoking Claude. Path A: direct Anthropic SDK calls from the sidecar. Path B: shell harness wrapping the `claude` CLI. Both are sidecar-side; neither is implemented in Sprint 1 or Sprint 2.
 
@@ -282,6 +349,14 @@ See `docs/architecture/decisions/README.md` for the full ADR index.
 
 **HostShell** — The CSS Grid compositor at `src/components/layout/HostShell/HostShell.tsx` that arranges the six layout regions (TitleBar, Sidebar, Inspector, TabStrip, PrimaryWorkArea, StatusBar) into the full application chrome. It is the composition root for the Epic 02 UI layer.
 
+**Asset index** — The SQLite-backed derived index of all skills, agents, commands, teams, and workflows discovered under `~/.claude/` and per-project `.claude/` directories. Built and maintained by the sidecar's `src/indexer/` module. Stored in the `assets` and related tables (see `docs/DATA-MODEL.md`). Source of truth remains `~/.claude/`; the index can be dropped and rebuilt at any time.
+
+**Library view** — A UI surface that displays the asset index for a given `kind` (Agent Library for `kind=agent`, Skill Library for `kind=skill`). Library views fetch from `GET /assets` directly (ADR-009) and subscribe to `GET /events` SSE for live invalidation via `useLibrarySSE`. First shipped in Sprint 5 (Stories 6.2 + 6.3).
+
+**SSE (Server-Sent Events)** — The unidirectional HTTP streaming protocol used by the sidecar `GET /events` endpoint to push watcher events to the React UI. The UI opens an `EventSource` connection; the sidecar pushes `data: <JSON>\n\n` frames per the SSE specification. The `useLibrarySSE` hook (`src/hooks/useLibrarySSE.ts`) manages the subscription lifecycle and drives TanStack Query invalidation on `LibraryRefreshEvent`.
+
+**Front-matter** — YAML metadata block delimited by `---` at the start of a skill or agent `.md` file, parsed by the sidecar validation pipeline per ADR-008. Stored in `assets.front_matter_json` as a JSON string after server-side parsing. The AgentCard UI reads `voice_id`, `archetype`, and `traits` from the parsed object (FR-010).
+
 ---
 
-_Last reviewed: 2026-05-15 by tech-writer agent against Sprint 2 (Stories 2.1–2.13, 2.22–2.26; ADR-004)._
+_Last reviewed: 2026-05-20 by tech-writer agent against Sprint 5 (Stories 6.1–6.3, 6.11–6.15; ADR-008, ADR-009)._
