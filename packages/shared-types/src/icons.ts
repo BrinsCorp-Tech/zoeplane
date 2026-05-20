@@ -59,7 +59,9 @@ export type IconName =
   // Status — EvaluatorStatusBadge additions (Story 2.7, operator-approved 2026-05-13)
   | "clock" // evaluator-status "pending review" (evaluator); validity-only "pending"
   | "x-octagon" // "declined" state (semantic-stronger than x-circle for hard-declined)
+  | "alert-octagon" // SkillCard degraded state body icon (Story 6.3)
   | "power" // hook "disabled by you" (user-toggled off)
+  | "link" // SkillCard plugin provenance chip icon (Story 6.3)
   // Domain
   | "terminal"
   | "git-branch"

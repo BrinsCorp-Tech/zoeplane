@@ -192,6 +192,12 @@ export {
 export * from "./epic-03";
 
 // ============================================================
+// Epic 06 Library Views (Story 6.2 — ADR-009 locked surface)
+// ============================================================
+
+export type { AssetsResponse, AssetSummary, AssetProvenanceSummary } from "./epic-06";
+
+// ============================================================
 // User preferences
 // ============================================================
 

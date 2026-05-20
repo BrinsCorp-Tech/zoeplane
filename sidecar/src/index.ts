@@ -43,6 +43,7 @@ import {
 } from "./indexer/hook-discovery";
 import { initEventRouter, subscribeToEventRouterEvents } from "./indexer/event-router";
 import { detectEditor } from "./editor-detection";
+import { handleGetAssets } from "./routes/assets";
 import { type WatcherEvent } from "@zoeplane/shared-types";
 
 // ---------------------------------------------------------------------------
@@ -677,6 +678,23 @@ const server = Bun.serve({
         eventRouter.unregisterOpenEditor(editorPath);
         return Response.json({ ok: true, path: editorPath }, { status: 200 });
       });
+    }
+
+    // ------------------------------------------------------------------
+    // GET /assets — query asset index with LEFT JOIN on provenance (Story 6.2 / ADR-009)
+    //
+    // Query params:
+    //   kind      (required) — "skill" | "agent" | "command" | "team" | "workflow"
+    //   scope     (optional) — "global" | "project" | "local"
+    //   projectId (optional) — UUID; required if scope=project|local
+    //   include   (optional) — reserved; v1 ignores (provenance always included)
+    //
+    // Response: AssetsResponse (ADR-009 §2)
+    // Error envelope: { error, message } per ADR-009 §6
+    // Handler extracted to src/routes/assets.ts for testability.
+    // ------------------------------------------------------------------
+    if (url.pathname === "/assets" && req.method === "GET") {
+      return handleGetAssets(url.searchParams, db);
     }
 
     // All other routes: 404. Future epics will extend this routing.
