@@ -43,6 +43,9 @@ import { StatusBar } from "../StatusBar/StatusBar";
 import { CommandPalette } from "../CommandPalette/CommandPalette";
 import { NotificationsCenter } from "../NotificationsCenter/NotificationsCenter";
 import { useProject } from "@/hooks/useProject";
+import { useActiveNav } from "@/stores/active-nav";
+import { AgentLibraryView } from "@/views/agent-library/AgentLibraryView";
+import { SkillLibraryView } from "@/views/skill-library/SkillLibraryView";
 
 // ─── Types ─────────────────────────────────────────────────────────────────────
 
@@ -70,17 +73,29 @@ export interface HostShellProps {
  */
 export function HostShell({ children, className }: HostShellProps): React.ReactElement {
   const project = useProject();
+  const { activeItemId, setActiveItem } = useActiveNav();
 
   // ── Content area: what goes inside PrimaryWorkArea ──────────────────────────
 
   // If children are explicitly supplied (Storybook / testing), use them directly.
-  // Otherwise derive from project state.
+  // Otherwise derive from project state + active nav item.
   const primaryContent: React.ReactNode = React.useMemo(() => {
     if (children !== undefined) return children;
 
+    // Stories 6.2/6.3: Library views render global-scope assets
+    // (~/.claude/agents, ~/.claude/skills) — they do NOT require a project
+    // to be open. Route them BEFORE the project-null gate.
+    if (activeItemId === "agents") {
+      return <AgentLibraryView />;
+    }
+
+    if (activeItemId === "skills") {
+      return <SkillLibraryView />;
+    }
+
     if (project === null) {
-      // AC #5 / Risk note: no functional picker exists in Sprint 2.
-      // Render a centered placeholder only — Epic 03 wires the actual picker.
+      // No nav item selected AND no project open — show the empty state.
+      // Epic 03 wires a functional project picker; Sprint 2 ships placeholder only.
       return (
         <div
           style={{
@@ -109,13 +124,13 @@ export function HostShell({ children, className }: HostShellProps): React.ReactE
               margin: 0,
             }}
           >
-            Open a project to get started
+            Open a project — or click Agents / Skills in the sidebar to browse global libraries.
           </p>
         </div>
       );
     }
 
-    // Project is open — Epic 03 route rendering wires into this slot.
+    // Project open + unmapped nav item → Epic 03 placeholder.
     return (
       <div
         style={{
@@ -130,7 +145,7 @@ export function HostShell({ children, className }: HostShellProps): React.ReactE
         Project open — Epic 03 wires route rendering here.
       </div>
     );
-  }, [children, project]);
+  }, [children, project, activeItemId]);
 
   // ── Layout ────────────────────────────────────────────────────────────────────
 
@@ -165,7 +180,7 @@ export function HostShell({ children, className }: HostShellProps): React.ReactE
           display: "flex",
         }}
       >
-        <Sidebar />
+        <Sidebar activeItemId={activeItemId ?? undefined} onItemSelect={setActiveItem} />
       </div>
 
       {/* Content column: TabStrip + PrimaryWorkArea */}

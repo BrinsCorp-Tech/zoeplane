@@ -2,6 +2,7 @@
 import * as React from "react";
 import {
   AlertCircle,
+  AlertOctagon,
   AlertTriangle,
   ArrowDown,
   ArrowLeft,
@@ -28,6 +29,7 @@ import {
   Grid,
   Home,
   Info,
+  Link,
   List,
   Loader2,
   Lock,
@@ -117,7 +119,9 @@ const ICON_MAP: Record<IconName, React.ComponentType<LucideProps>> = {
   // Status — EvaluatorStatusBadge additions (Story 2.7, operator-approved 2026-05-13)
   clock: Clock, // evaluator-status "pending review"; validity-only "pending"
   "x-octagon": XOctagon, // "declined" — semantic-stronger than x-circle
+  "alert-octagon": AlertOctagon, // SkillCard degraded state body icon (Story 6.3)
   power: Power, // hook "disabled by you" (user-toggled off)
+  link: Link, // SkillCard plugin provenance chip icon (Story 6.3)
   // Domain
   terminal: Terminal,
   "git-branch": GitBranch,

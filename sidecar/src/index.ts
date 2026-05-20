@@ -43,6 +43,7 @@ import {
 } from "./indexer/hook-discovery";
 import { initEventRouter, subscribeToEventRouterEvents } from "./indexer/event-router";
 import { detectEditor } from "./editor-detection";
+import { handleGetAssets } from "./routes/assets";
 import { type WatcherEvent } from "@zoeplane/shared-types";
 
 // ---------------------------------------------------------------------------
@@ -131,11 +132,43 @@ log("INFO", "Database ready", { dbPath });
 // Bind to port 0 so the kernel assigns a free ephemeral port. This avoids
 // port conflicts when multiple dev instances run simultaneously or when the
 // previous instance's port lingers in TIME_WAIT.
+//
+// CORS (Sprint 5 / Story 6.2): the Tauri webview origin (tauri://localhost in
+// production, http://localhost:5173 in dev) differs from the sidecar origin
+// (http://127.0.0.1:<ephemeral>). Cross-origin browser fetch requires explicit
+// CORS headers. Since the sidecar only binds 127.0.0.1, allowing any origin
+// is safe — the loopback restriction is the security boundary, not Origin.
+
+const CORS_HEADERS: Record<string, string> = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
+  "Access-Control-Allow-Headers": "Content-Type",
+  "Access-Control-Max-Age": "86400",
+};
+
+function withCors(response: Response): Response {
+  const headers = new Headers(response.headers);
+  for (const [k, v] of Object.entries(CORS_HEADERS)) headers.set(k, v);
+  return new Response(response.body, {
+    status: response.status,
+    statusText: response.statusText,
+    headers,
+  });
+}
 
 const server = Bun.serve({
   hostname: "127.0.0.1",
   port: 0, // kernel-assigned ephemeral port
-  fetch(req: Request): Response | Promise<Response> {
+  async fetch(req: Request): Promise<Response> {
+    // CORS preflight — short-circuit before any route dispatch.
+    if (req.method === "OPTIONS") {
+      return new Response(null, { status: 204, headers: CORS_HEADERS });
+    }
+    return withCors(await Promise.resolve(handleRequest(req)));
+  },
+});
+
+function handleRequest(req: Request): Response | Promise<Response> {
     const url = new URL(req.url);
 
     // ------------------------------------------------------------------
@@ -679,10 +712,26 @@ const server = Bun.serve({
       });
     }
 
+    // ------------------------------------------------------------------
+    // GET /assets — query asset index with LEFT JOIN on provenance (Story 6.2 / ADR-009)
+    //
+    // Query params:
+    //   kind      (required) — "skill" | "agent" | "command" | "team" | "workflow"
+    //   scope     (optional) — "global" | "project" | "local"
+    //   projectId (optional) — UUID; required if scope=project|local
+    //   include   (optional) — reserved; v1 ignores (provenance always included)
+    //
+    // Response: AssetsResponse (ADR-009 §2)
+    // Error envelope: { error, message } per ADR-009 §6
+    // Handler extracted to src/routes/assets.ts for testability.
+    // ------------------------------------------------------------------
+    if (url.pathname === "/assets" && req.method === "GET") {
+      return handleGetAssets(url.searchParams, db);
+    }
+
     // All other routes: 404. Future epics will extend this routing.
     return new Response("Not Found", { status: 404 });
-  },
-});
+}
 
 // Announce the bound port to stdout as a single-line JSON object.
 // The Tauri shell reads this line at startup and stores the port in app state

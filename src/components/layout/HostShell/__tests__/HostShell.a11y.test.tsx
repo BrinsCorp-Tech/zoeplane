@@ -8,6 +8,8 @@
  *   - No duplicate landmarks from composition
  *   - Zero axe violations (color-contrast disabled — JSDOM cannot compute OKLCH)
  *   - Empty-state placeholder text present when no project is open
+ *   - Library view routing: "agents" → AgentLibraryView, "skills" → SkillLibraryView
+ *   - Unmapped nav item → Epic 03 placeholder; null → same
  *
  * JSDOM limitation — OKLCH contrast:
  *   axe-core's color-contrast rule is DISABLED (JSDOM cannot compute OKLCH).
@@ -18,17 +20,25 @@
  * useAppStore._setProjectRoot is used to seed project state for the
  * "project open" variant.
  *
+ * Sprint 5 (Epic 06) additions:
+ *   AgentLibraryView and SkillLibraryView are now rendered by HostShell when the
+ *   active nav item is "agents" or "skills". Both views call fetchAssets and
+ *   subscribe to SSE on mount; the relevant modules are mocked so no real HTTP or
+ *   SSE activity occurs. TanStack QueryClientProvider wraps the new test cases.
+ *
  * To run this test alone:
  *   bun run test --reporter=verbose src/components/layout/HostShell/__tests__/HostShell.a11y.test.tsx
  */
 
 import { cleanup, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { runAxe, formatViolations } from "@/test/helpers/runAxe";
 import { HostShell } from "../HostShell";
 import { useAppStore } from "@/stores/app";
 import { useNotificationsStore } from "@/stores/notifications";
 import { useCommandPaletteStore } from "@/stores/commandPalette";
+import { useActiveNav } from "@/stores/active-nav";
 
 // ─── Mock Tauri invoke ────────────────────────────────────────────────────────
 //
@@ -38,6 +48,61 @@ import { useCommandPaletteStore } from "@/stores/commandPalette";
 vi.mock("@tauri-apps/api/core", () => ({
   invoke: vi.fn().mockResolvedValue({ running: true, pid: 1234, version: "1.0.0" }),
 }));
+
+// ─── Mock sidecar-client (Sprint 5 addition) ─────────────────────────────────
+//
+// AgentLibraryView and SkillLibraryView call getSidecarBaseUrl() and
+// subscribeSidecarPort() on mount. Return null so queries stay disabled and
+// no real HTTP or SSE activity occurs in these structural tests.
+
+vi.mock("@/lib/sidecar-client", () => ({
+  getSidecarBaseUrl: vi.fn().mockReturnValue(null),
+  initSidecarClient: vi.fn(),
+  subscribeSidecarPort: vi.fn((_cb: () => void) => () => {}),
+}));
+
+// ─── Mock fetch-assets (Sprint 5 addition) ───────────────────────────────────
+//
+// Prevent any real HTTP calls from the library views. With getSidecarBaseUrl
+// returning null the query is disabled, but mocking defensively keeps the
+// module boundary clean and avoids subtle import-order issues.
+
+vi.mock("@/lib/fetch-assets", () => ({
+  fetchAssets: vi.fn().mockResolvedValue({ assets: [], truncated: false, totalCount: 0 }),
+  SidecarError: class SidecarError extends Error {
+    constructor(
+      message: string,
+      public readonly status: number,
+      public readonly response?: unknown,
+    ) {
+      super(message);
+    }
+  },
+}));
+
+// ─── EventSource stub (Sprint 5 addition) ────────────────────────────────────
+//
+// EventSource is not available in JSDOM. Stub it globally so the SSE hooks
+// inside AgentLibraryView/SkillLibraryView do not throw on mount.
+// With getSidecarBaseUrl returning null, the hooks return early before
+// constructing an EventSource, but the stub prevents any accidental throw.
+
+class MockEventSource {
+  addEventListener(_type: string, _handler: (e: MessageEvent) => void): void {}
+  close(): void {}
+}
+vi.stubGlobal("EventSource", MockEventSource);
+
+// ─── Helper: QueryClient wrapper (Sprint 5 addition) ─────────────────────────
+//
+// AgentLibraryView and SkillLibraryView use useQuery — they require a
+// QueryClientProvider ancestor. Wrap only the test cases that render the
+// library views via HostShell navigation state.
+
+function renderWithQuery(ui: JSX.Element) {
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  return render(<QueryClientProvider client={client}>{ui}</QueryClientProvider>);
+}
 
 // ─── Test setup ───────────────────────────────────────────────────────────────
 //
@@ -52,6 +117,7 @@ afterEach(() => {
   useNotificationsStore.getState().clearAll();
   useNotificationsStore.getState().closeCenter();
   useCommandPaletteStore.setState({ actions: [], open: false });
+  useActiveNav.setState({ activeItemId: null });
   vi.clearAllMocks();
 });
 
@@ -60,6 +126,7 @@ beforeEach(() => {
   useNotificationsStore.getState().clearAll();
   useNotificationsStore.getState().closeCenter();
   useCommandPaletteStore.setState({ actions: [], open: false });
+  useActiveNav.setState({ activeItemId: null });
 });
 
 describe("HostShell — structural accessibility (Story 2.8 AC #9)", () => {
@@ -114,9 +181,11 @@ describe("HostShell — structural accessibility (Story 2.8 AC #9)", () => {
       expect(main.textContent).toContain("No project open");
     });
 
-    it("renders 'Open a project to get started' subtext when projectRoot is null", () => {
+    it("renders the open-project subtext with library hint when projectRoot is null", () => {
       render(<HostShell />);
-      expect(screen.getByText("Open a project to get started")).toBeDefined();
+      expect(
+        screen.getByText(/Open a project — or click Agents \/ Skills in the sidebar/),
+      ).toBeDefined();
     });
   });
 
@@ -142,17 +211,74 @@ describe("HostShell — structural accessibility (Story 2.8 AC #9)", () => {
       // that is correct. We only verify the HostShell empty-state heading
       // (which lives inside <main>) is absent from the main region.
       const main = screen.getByRole("main");
-      expect(main.textContent).not.toContain("Open a project to get started");
+      expect(main.textContent).not.toContain("Open a project");
     });
   });
 
   // ── Project open state ──────────────────────────────────────────────────────
 
   describe("project open state", () => {
-    it("renders Epic 03 placeholder (not empty-state) when a project is open", () => {
+    it("renders Epic 03 placeholder (not empty-state) when a project is open and no nav item selected", () => {
       useAppStore.getState()._setProjectRoot("/Users/example/project");
+      // activeItemId is null (default from beforeEach) — unmapped → placeholder
       render(<HostShell />);
       expect(screen.queryByText("No project open")).toBeNull();
+      expect(screen.getByText(/Epic 03 wires route rendering/)).toBeDefined();
+    });
+
+    it("renders Epic 03 placeholder when activeItemId is an unmapped value", () => {
+      useAppStore.getState()._setProjectRoot("/Users/example/project");
+      useActiveNav.setState({ activeItemId: "commands" });
+      render(<HostShell />);
+      expect(screen.getByText(/Epic 03 wires route rendering/)).toBeDefined();
+    });
+  });
+
+  // ── Library view routing (Sprint 5 — Epic 06) ───────────────────────────────
+  //
+  // These tests require a QueryClientProvider because the library views use
+  // TanStack Query internally. The sidecar-client and fetch-assets modules are
+  // mocked (getSidecarBaseUrl returns null) so queries stay disabled and no
+  // real HTTP activity occurs. The LibraryShell <section aria-label> is the
+  // stable assertion surface.
+
+  describe("library view routing — Sprint 5 (Epic 06)", () => {
+    it("renders AgentLibraryView when activeItemId is 'agents' and project is open", () => {
+      useAppStore.getState()._setProjectRoot("/Users/example/project");
+      useActiveNav.setState({ activeItemId: "agents" });
+      renderWithQuery(<HostShell />);
+      // LibraryShell renders <section aria-label="Agents library"> (region role)
+      expect(screen.getByRole("region", { name: "Agents library" })).toBeDefined();
+    });
+
+    it("renders SkillLibraryView when activeItemId is 'skills' and project is open", () => {
+      useAppStore.getState()._setProjectRoot("/Users/example/project");
+      useActiveNav.setState({ activeItemId: "skills" });
+      renderWithQuery(<HostShell />);
+      // LibraryShell renders <section aria-label="Skills library"> (region role)
+      expect(screen.getByRole("region", { name: "Skills library" })).toBeDefined();
+    });
+
+    it("renders AgentLibraryView when project is null (global-scope library bypasses project gate)", () => {
+      // Library views show global-scope assets (~/.claude/agents) and do NOT
+      // require a project to be open. Routing must happen before the project-null gate.
+      useActiveNav.setState({ activeItemId: "agents" });
+      renderWithQuery(<HostShell />);
+      expect(screen.getByRole("region", { name: "Agents library" })).toBeDefined();
+    });
+
+    it("renders SkillLibraryView when project is null (global-scope library bypasses project gate)", () => {
+      useActiveNav.setState({ activeItemId: "skills" });
+      renderWithQuery(<HostShell />);
+      expect(screen.getByRole("region", { name: "Skills library" })).toBeDefined();
+    });
+
+    it("renders placeholder when activeItemId is null with project open", () => {
+      useAppStore.getState()._setProjectRoot("/Users/example/project");
+      // activeItemId remains null from beforeEach
+      render(<HostShell />);
+      expect(screen.queryByRole("region", { name: "Agents library" })).toBeNull();
+      expect(screen.queryByRole("region", { name: "Skills library" })).toBeNull();
       expect(screen.getByText(/Epic 03 wires route rendering/)).toBeDefined();
     });
   });
