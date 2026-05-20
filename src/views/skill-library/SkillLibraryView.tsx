@@ -28,6 +28,7 @@ import { getSidecarBaseUrl, subscribeSidecarPort } from "@/lib/sidecar-client";
 import { SkillLibraryEmptyState } from "./empty-state";
 import { SkillLibraryErrorState } from "./error-state";
 import { useLibrarySSE } from "@/hooks/useLibrarySSE";
+import { useSkillNav } from "@/stores/skill-nav";
 
 // ---------------------------------------------------------------------------
 // SkillLibraryView
@@ -80,10 +81,8 @@ export function SkillLibraryView(): React.JSX.Element {
           key={asset.id}
           asset={asset}
           onActivate={(a) => {
-            // TODO: Story 6.7 — navigate to Skill Detail view
-            if (import.meta.env.DEV) {
-              console.log("[SkillLibraryView] skill activated:", a.id);
-            }
+            // Story 6.4: navigate to Skill Detail view
+            useSkillNav.getState().open(a.id);
           }}
         />
       )}

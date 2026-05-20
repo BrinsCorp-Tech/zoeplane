@@ -15,6 +15,17 @@ export default defineConfig({
   },
 
   test: {
+    // CodeMirror 6 is ESM-only and cannot be transpiled by Vitest's default CJS
+    // transform. Exclude it from transformation so Vite handles it as native ESM.
+    // Pattern: node_modules/(?!(@codemirror)/) means "transform everything EXCEPT @codemirror/*"
+    server: {
+      deps: {
+        // Tell Vite to inline (transform) @codemirror/* — required because
+        // CodeMirror ships ESM-only which Vitest's node worker cannot import directly.
+        inline: [/^@codemirror\//],
+      },
+    },
+
     // Only scan project source — never third-party caches or node_modules.
     include: [
       "src/**/*.{test,spec}.{ts,tsx}",

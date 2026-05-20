@@ -159,6 +159,8 @@ pub fn run() {
             // Story 3.9: Asset reveal + editor open (FR-034 / FR-035).
             commands::assets::reveal_in_finder,
             commands::assets::open_in_editor,
+            // Story 6.4: Skill file write (FR-004).
+            commands::skills::write_skill_file,
         ])
         .setup(|app| {
             info!("App setup — spawning sidecar");

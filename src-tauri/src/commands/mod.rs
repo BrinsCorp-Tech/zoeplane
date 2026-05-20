@@ -8,3 +8,4 @@ pub mod editor;
 pub mod fs;
 pub mod project;
 pub mod response;
+pub mod skills;

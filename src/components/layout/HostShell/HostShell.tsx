@@ -46,6 +46,9 @@ import { useProject } from "@/hooks/useProject";
 import { useActiveNav } from "@/stores/active-nav";
 import { AgentLibraryView } from "@/views/agent-library/AgentLibraryView";
 import { SkillLibraryView } from "@/views/skill-library/SkillLibraryView";
+import { SkillDetailView } from "@/views/skill-detail/SkillDetailView";
+import { SkillEditorView } from "@/views/skill-editor/SkillEditorView";
+import { useSkillNav } from "@/stores/skill-nav";
 
 // ─── Types ─────────────────────────────────────────────────────────────────────
 
@@ -74,6 +77,8 @@ export interface HostShellProps {
 export function HostShell({ children, className }: HostShellProps): React.ReactElement {
   const project = useProject();
   const { activeItemId, setActiveItem } = useActiveNav();
+  // Story 6.4: skill sub-navigation — must be called at top level (Rules of Hooks)
+  const { mode: skillMode } = useSkillNav();
 
   // ── Content area: what goes inside PrimaryWorkArea ──────────────────────────
 
@@ -90,6 +95,10 @@ export function HostShell({ children, className }: HostShellProps): React.ReactE
     }
 
     if (activeItemId === "skills") {
+      // Story 6.4: sub-navigation within the Skills section.
+      // mode transitions: library → detail → editor
+      if (skillMode === "editor") return <SkillEditorView />;
+      if (skillMode === "detail") return <SkillDetailView />;
       return <SkillLibraryView />;
     }
 
@@ -145,7 +154,7 @@ export function HostShell({ children, className }: HostShellProps): React.ReactE
         Project open — Epic 03 wires route rendering here.
       </div>
     );
-  }, [children, project, activeItemId]);
+  }, [children, project, activeItemId, skillMode]);
 
   // ── Layout ────────────────────────────────────────────────────────────────────
 

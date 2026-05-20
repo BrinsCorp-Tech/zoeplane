@@ -386,6 +386,21 @@ StyleDictionary.registerFormat({
     --pane-error-border:     var(--color-pane-error);
     --pane-completed-border: var(--color-pane-completed);
 
+    /* ---- CodeMirror editor (Story 6.4) ---- */
+    --color-editor-background:               var(--color-code-background);
+    --color-editor-foreground:               var(--color-foreground);
+    --color-editor-gutter-background:        var(--color-surface-sunken);
+    --color-editor-gutter-foreground:        var(--color-foreground-muted);
+    --color-editor-cursor:                   var(--color-accent);
+    --color-editor-selection-background:     var(--color-accent-muted);
+    --color-editor-active-line-background:   var(--color-surface-raised);
+    --color-editor-syntax-heading:           var(--color-accent);
+    --color-editor-syntax-emphasis:          var(--color-foreground);
+    --color-editor-syntax-code:              var(--color-foreground-muted);
+    --color-editor-syntax-link:              var(--color-accent);
+    --color-editor-error-marker:             var(--color-danger);
+    --color-editor-error-marker-background:  var(--color-danger-muted);
+
     /* TODO (Epic 02 Sprint 1): expand with Badge, Modal, Sidebar, TitleBar,
        CommandPalette, LibraryShell, EvaluatorStatusBadge component tokens.
        See ux-spec §8.1 (Foundation tier) and §8.2 (Layout tier). */
