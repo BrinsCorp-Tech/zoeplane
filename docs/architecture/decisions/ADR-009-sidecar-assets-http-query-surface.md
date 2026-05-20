@@ -8,12 +8,12 @@
 
 Epic 06 introduces four Library / Detail surfaces that all read from the same shipped `assets` table (002_asset_index.sql):
 
-| Story | View                       | Filter                                              |
-| ----- | -------------------------- | --------------------------------------------------- |
-| 6.2   | Agent Library              | `kind = 'agent' AND scope = 'global'`               |
-| 6.3   | Skill Library              | `kind = 'skill' AND scope = 'global'`               |
-| 6.6   | Commands Library           | `kind = 'command'` (both global + project scopes)   |
-| 6.10  | Cross-reference panels     | `assets` joined with `hook_index` (Epic 09 — empty in v1) |
+| Story | View                   | Filter                                                    |
+| ----- | ---------------------- | --------------------------------------------------------- |
+| 6.2   | Agent Library          | `kind = 'agent' AND scope = 'global'`                     |
+| 6.3   | Skill Library          | `kind = 'skill' AND scope = 'global'`                     |
+| 6.6   | Commands Library       | `kind = 'command'` (both global + project scopes)         |
+| 6.10  | Cross-reference panels | `assets` joined with `hook_index` (Epic 09 — empty in v1) |
 
 Sprint 4 shipped seven HTTP routes on the sidecar (`/health`, `/events`, `/projects`, `/watcher/...`, `/indexer/scan/project`, `/state/...`, `/preferences/...`, `/editor/...`) but **no route returns asset rows**. The UI in Stories 6.2 / 6.3 / 6.6 assumes a fetch keyed `['assets', kind, scope]` against the sidecar HTTP loopback that does not exist. Without this contract locked, every Library story re-litigates the query shape and risks divergent client-side parsing of `front_matter_json`.
 
@@ -35,16 +35,17 @@ This ADR locks the route, response, JOIN strategy, parsing locus, and invalidati
 GET /assets?kind=<kind>&scope=<scope>&projectId=<uuid>&include=<comma-separated>
 ```
 
-| Query param | Required | Allowed values | Default | Notes |
-| --- | --- | --- | --- | --- |
-| `kind` | yes | `skill` \| `agent` \| `command` \| `team` \| `workflow` | — | Maps to `assets.kind` CHECK enum. |
-| `scope` | no | `global` \| `project` \| `local` | (all scopes) | Omit to get rows across all scopes (Story 6.6 case). |
-| `projectId` | no | UUID v4 | none | Required if `scope=project` or `scope=local`; ignored if `scope=global`. |
-| `include` | no | `provenance` (default-on for v1) | `provenance` | Reserved for future fan-out: `provenance,evaluator,cross_refs`. v1 ignores anything other than `provenance`. |
+| Query param | Required | Allowed values                                          | Default      | Notes                                                                                                        |
+| ----------- | -------- | ------------------------------------------------------- | ------------ | ------------------------------------------------------------------------------------------------------------ |
+| `kind`      | yes      | `skill` \| `agent` \| `command` \| `team` \| `workflow` | —            | Maps to `assets.kind` CHECK enum.                                                                            |
+| `scope`     | no       | `global` \| `project` \| `local`                        | (all scopes) | Omit to get rows across all scopes (Story 6.6 case).                                                         |
+| `projectId` | no       | UUID v4                                                 | none         | Required if `scope=project` or `scope=local`; ignored if `scope=global`.                                     |
+| `include`   | no       | `provenance` (default-on for v1)                        | `provenance` | Reserved for future fan-out: `provenance,evaluator,cross_refs`. v1 ignores anything other than `provenance`. |
 
 **Soft cap:** 500 rows. Response includes `truncated: true` if `assets` would have returned more — caller learns to add filters. FR-002 / FR-010 cap real-world libraries at 100; the 500 ceiling is a safety net.
 
 **Excluded by default:**
+
 - Rows where `deleted_at IS NOT NULL` (soft-deleted).
 - Rows where `shadowed_by_project_id IS NOT NULL` (FR-074 overlay invariant — shadowed global rows are hidden from Library views).
 
