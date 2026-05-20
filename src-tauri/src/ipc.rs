@@ -30,6 +30,11 @@ pub struct SidecarStatus {
     /// Reserved for future use — will carry sidecar version string once
     /// Epic 02 adds richer health data.
     pub version: Option<String>,
+    /// The HTTP loopback port the sidecar is listening on. Returned alongside
+    /// `running: true` so the React UI can construct the sidecar base URL via
+    /// IPC query when it joins after the one-shot `sidecar-ready` event has
+    /// already fired (Sprint 5 / Story 6.2 pub-sub race fix).
+    pub port: Option<u16>,
 }
 
 impl SidecarStatus {
@@ -42,6 +47,7 @@ impl SidecarStatus {
             running: false,
             pid: None,
             version: None,
+            port: None,
         }
     }
 }
@@ -110,6 +116,7 @@ pub async fn sidecar_status(
                     running: true,
                     pid: Some(health.pid),
                     version: None,
+                    port: Some(port),
                 })
             }
             Err(e) => {
