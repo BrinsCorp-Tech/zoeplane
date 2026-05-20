@@ -8,41 +8,44 @@ No formal WCAG conformance statement (per WCAG-EM) has been issued. The claim wi
 
 ## Tested Scope
 
-Sprint 2 automated accessibility testing covers the following surfaces:
+Automated accessibility testing covers the following surfaces. Sprint 2 established the foundation-tier and layout-tier test coverage; Sprint 5 added the three new Epic 06 component surfaces.
 
-| Surface                                | Test type                    | Test file(s)                                                       |
-| -------------------------------------- | ---------------------------- | ------------------------------------------------------------------ |
-| Semantic token contrast (light + dark) | OKLCH math (culori)          | `src/test/contrast-harness.a11y.test.ts`                           |
-| Button (6 variants)                    | axe-core structural          | `src/components/ui/Button/__tests__/Button.a11y.test.tsx`          |
-| Card                                   | axe-core structural          | `src/components/ui/Card/__tests__/`                                |
-| Badge (7 variants)                     | axe-core structural          | `src/components/ui/Badge/__tests__/`                               |
-| Input                                  | axe-core structural          | `src/components/ui/Input/__tests__/`                               |
-| Icon                                   | axe-core structural          | `src/components/ui/Icon/__tests__/`                                |
-| Modal (Radix Dialog)                   | axe-core structural          | `src/components/ui/Modal/__tests__/`                               |
-| Toast + Toaster (Radix Toast)          | axe-core structural          | `src/components/ui/Toast/__tests__/`                               |
-| Tooltip (Radix Tooltip)                | axe-core structural          | `src/components/ui/Tooltip/__tests__/`                             |
-| Dropdown (Radix DropdownMenu)          | axe-core structural          | `src/components/ui/Dropdown/__tests__/`                            |
-| FormField                              | axe-core structural          | `src/components/ui/FormField/__tests__/`                           |
-| Select (Radix Select)                  | axe-core structural          | `src/components/ui/Select/__tests__/`                              |
-| Checkbox (Radix Checkbox)              | axe-core structural          | `src/components/ui/Checkbox/__tests__/`                            |
-| Radio (Radix RadioGroup)               | axe-core structural          | `src/components/ui/Radio/__tests__/`                               |
-| Tabs (Radix Tabs)                      | axe-core structural          | `src/components/ui/Tabs/__tests__/`                                |
-| Skeleton variants                      | axe-core structural          | `src/components/ui/Skeleton/__tests__/`                            |
-| Spinner (4 sizes)                      | axe-core structural          | `src/components/ui/Spinner/__tests__/`                             |
-| EvaluatorStatusBadge                   | axe-core structural          | `src/components/ui/EvaluatorStatusBadge/__tests__/`                |
-| Sidebar                                | axe-core structural          | `src/components/layout/Sidebar/__tests__/`                         |
-| Inspector                              | axe-core structural          | `src/components/layout/Inspector/__tests__/`                       |
-| TitleBar                               | axe-core structural          | `src/components/layout/TitleBar/__tests__/`                        |
-| StatusBar                              | axe-core structural          | `src/components/layout/StatusBar/__tests__/`                       |
-| TabStrip                               | axe-core structural          | `src/components/layout/TabStrip/__tests__/`                        |
-| PrimaryWorkArea                        | axe-core structural          | `src/components/layout/PrimaryWorkArea/__tests__/`                 |
-| CommandPalette                         | axe-core structural          | `src/components/layout/CommandPalette/__tests__/`                  |
-| NotificationsCenter                    | axe-core structural          | `src/components/layout/NotificationsCenter/__tests__/`             |
-| CollapsiblePane                        | axe-core structural          | `src/components/layout/CollapsiblePane/__tests__/`                 |
-| LibraryShell                           | axe-core structural          | `src/components/library-shell/__tests__/`                          |
-| Animation catalog (A-01..A-41)         | CSS invariant (source parse) | `src/components/__tests__/animations-reduced-motion.a11y.test.tsx` |
+| Surface                                | Test type                    | Test file(s)                                                       | Sprint |
+| -------------------------------------- | ---------------------------- | ------------------------------------------------------------------ | ------ |
+| Semantic token contrast (light + dark) | OKLCH math (culori)          | `src/test/contrast-harness.a11y.test.ts`                           | S2     |
+| Button (6 variants)                    | axe-core structural          | `src/components/ui/Button/__tests__/Button.a11y.test.tsx`          | S2     |
+| Card                                   | axe-core structural          | `src/components/ui/Card/__tests__/`                                | S2     |
+| Badge (7 variants)                     | axe-core structural          | `src/components/ui/Badge/__tests__/`                               | S2     |
+| Input                                  | axe-core structural          | `src/components/ui/Input/__tests__/`                               | S2     |
+| Icon                                   | axe-core structural          | `src/components/ui/Icon/__tests__/`                                | S2     |
+| Modal (Radix Dialog)                   | axe-core structural          | `src/components/ui/Modal/__tests__/`                               | S2     |
+| Toast + Toaster (Radix Toast)          | axe-core structural          | `src/components/ui/Toast/__tests__/`                               | S2     |
+| Tooltip (Radix Tooltip)                | axe-core structural          | `src/components/ui/Tooltip/__tests__/`                             | S2     |
+| Dropdown (Radix DropdownMenu)          | axe-core structural          | `src/components/ui/Dropdown/__tests__/`                            | S2     |
+| FormField                              | axe-core structural          | `src/components/ui/FormField/__tests__/`                           | S2     |
+| Select (Radix Select)                  | axe-core structural          | `src/components/ui/Select/__tests__/`                              | S2     |
+| Checkbox (Radix Checkbox)              | axe-core structural          | `src/components/ui/Checkbox/__tests__/`                            | S2     |
+| Radio (Radix RadioGroup)               | axe-core structural          | `src/components/ui/Radio/__tests__/`                               | S2     |
+| Tabs (Radix Tabs)                      | axe-core structural          | `src/components/ui/Tabs/__tests__/`                                | S2     |
+| Skeleton variants                      | axe-core structural          | `src/components/ui/Skeleton/__tests__/`                            | S2     |
+| Spinner (4 sizes)                      | axe-core structural          | `src/components/ui/Spinner/__tests__/`                             | S2     |
+| EvaluatorStatusBadge                   | axe-core structural          | `src/components/ui/EvaluatorStatusBadge/__tests__/`                | S2     |
+| Sidebar                                | axe-core structural          | `src/components/layout/Sidebar/__tests__/`                         | S2     |
+| Inspector                              | axe-core structural          | `src/components/layout/Inspector/__tests__/`                       | S2     |
+| TitleBar                               | axe-core structural          | `src/components/layout/TitleBar/__tests__/`                        | S2     |
+| StatusBar                              | axe-core structural          | `src/components/layout/StatusBar/__tests__/`                       | S2     |
+| TabStrip                               | axe-core structural          | `src/components/layout/TabStrip/__tests__/`                        | S2     |
+| PrimaryWorkArea                        | axe-core structural          | `src/components/layout/PrimaryWorkArea/__tests__/`                 | S2     |
+| CommandPalette                         | axe-core structural          | `src/components/layout/CommandPalette/__tests__/`                  | S2     |
+| NotificationsCenter                    | axe-core structural          | `src/components/layout/NotificationsCenter/__tests__/`             | S2     |
+| CollapsiblePane                        | axe-core structural          | `src/components/layout/CollapsiblePane/__tests__/`                 | S2     |
+| LibraryShell                           | axe-core structural          | `src/components/library-shell/__tests__/`                          | S2     |
+| **AgentCard**                          | axe-core structural          | `src/components/agent-card/__tests__/`                             | S5     |
+| **SkillCard**                          | axe-core structural          | `src/components/skill-card/__tests__/`                             | S5     |
+| **LibraryStatePanel**                  | axe-core structural          | `src/components/library-shell/__tests__/` (LibraryStatePanel test) | S5     |
+| Animation catalog (A-01..A-41)         | CSS invariant (source parse) | `src/components/__tests__/animations-reduced-motion.a11y.test.tsx` | S2     |
 
-All 28 per-component test files use `axe-core` directly (not via `jest-axe`), invoked through the canonical helper at `src/test/helpers/runAxe.ts`.
+All per-component test files use `axe-core` directly (not via `jest-axe`), invoked through the canonical helper at `src/test/helpers/runAxe.ts`.
 
 ## WCAG 2.2 AA — Contrast Enforcement
 
@@ -195,4 +198,4 @@ See `docs/SECURITY.md` for the security contact. Accessibility issues that are n
 
 ---
 
-_Last reviewed: 2026-05-15 by sprint-programmer against Sprint 3 (Story H.1; Chromatic removal, ADR-006 visual coverage posture, @storybook/addon-a11y added)._
+_Last reviewed: 2026-05-20 by tech-writer agent against Sprint 5 (Stories 6.2, 6.3, 6.13 — AgentCard, SkillCard, LibraryStatePanel a11y test surfaces added)._

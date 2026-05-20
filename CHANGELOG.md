@@ -9,6 +9,47 @@ Versioning: [Semantic Versioning](https://semver.org/)
 
 ## [Unreleased]
 
+### Sprint 5 (2026-05-19 → 2026-05-20)
+
+Sprint 5 shipped the first user-visible product surfaces (Agent Library and Skill Library views, FR-010 + FR-002) and formalized a deliberate architectural inversion: the React UI now makes direct HTTP fetches to the sidecar for read-heavy library data, retiring the prior "UI never speaks to sidecar directly" rule for the read-only query case (ADR-009). Eight stories shipped across three PRs (#36, #37, #38).
+
+#### Added
+
+- **Agent Library view** (PR #37 — Story 6.2): `src/views/agent-library/AgentLibraryView.tsx` — Agent Library view fetching from `GET /assets?kind=agent` via TanStack Query. Renders `AgentCard` grid with voice ID, archetype, and trait composition from parsed front-matter (FR-010). Includes empty-state and error-state panels.
+- **AgentCard component** (PR #37 — Story 6.2): `src/components/agent-card/AgentCard.tsx` — Library card for agent assets. Renders voice ID, archetype (derived from front-matter `archetype` field via `derive-archetype.ts`), trait composition, scope badge, validation status, and relative modification time. Has Storybook stories and axe-core structural tests.
+- **Skill Library view** (PR #37 — Story 6.3): `src/views/skill-library/SkillLibraryView.tsx` — Skill Library view fetching from `GET /assets?kind=skill` via TanStack Query. Renders `SkillCard` grid with description, scope, plugin source indicator, and validation badge (FR-002). Includes empty-state and error-state panels.
+- **SkillCard component** (PR #37 — Story 6.3): `src/components/skill-card/SkillCard.tsx` — Library card for skill assets. Renders skill name, description excerpt from front-matter or body, scope badge, plugin source indicator (derived via `derive-plugin-source.ts` from `asset_provenance`), validation status, and relative modification time. Has Storybook stories and axe-core structural tests.
+- **Sidecar `GET /assets` route** (PR #37 — Story 6.2, ADR-009): `sidecar/src/routes/assets.ts::handleGetAssets()`. Accepts `kind` (required), `scope` (optional), `projectId` (conditional), validates query params, executes LEFT JOIN on `assets` + `asset_provenance`, server-side `JSON.parse`s `front_matter_json`, applies 500-row soft cap (LIMIT 501). Returns `AssetsResponse` (`packages/shared-types/src/epic-06.ts`). Locked at SemVer through v1.0.0.
+- **Sidecar HTTP client** (PR #37 — Story 6.2): `src/lib/sidecar-client.ts` — `initSidecarClient()` called at `App.tsx` mount; registers Tauri `sidecar-ready` event listener and IPC fallback poll to close pub/sub race. `getSidecarBaseUrl()` returns current `http://127.0.0.1:{port}` or null. `subscribeSidecarPort()` for `useSyncExternalStore`.
+- **`fetch-assets` client** (PR #37 — Story 6.2): `src/lib/fetch-assets.ts` — typed HTTP wrapper for `GET /assets`. Accepts `FetchAssetsParams`, throws `SidecarError` on 4xx/5xx. Used with TanStack Query `useQuery`.
+- **`useLibrarySSE` hook** (PR #38 — Story 6.12): `src/hooks/useLibrarySSE.ts` — shared SSE invalidation hook extracted from the inline patterns in `AgentLibraryView` and `SkillLibraryView`. Subscribes to `GET /events`, invalidates TanStack Query `["assets", kind]` on each `LibraryRefreshEvent` matching the given kind. Lifecycle tied to `enabled` flag.
+- **`LibraryStatePanel` primitive** (PR #38 — Story 6.13): `src/components/library-shell/LibraryStatePanel.tsx` — shared empty/error/loading state primitive. Used by both Agent Library and Skill Library views. Includes axe-core structural tests.
+- **`useRevealAction` hook** (PR #38 — Story 6.13): Shared "reveal in Finder / reveal error" action hook extracted from library view error-state components. Agent Library inherits Skill Library's reveal-error UX pattern.
+- **`assetNameSearchPredicate`** (PR #38 — Story 6.14): `src/lib/asset-search.ts` — client-side fuzzy name filter predicate for library views. Lowercased substring match on `AssetSummary.name`.
+- **`formatRelativeTime`** (PR #38 — Story 6.15, hoisted from `agent-card/`): `src/lib/format-relative-time.ts` — formats a Unix epoch ms timestamp as a human-readable relative time string (e.g., "3 minutes ago", "yesterday"). Now shared across Agent Library and Skill Library cards.
+- **`active-nav` Zustand store** (PR #37 — Story 6.2 wiring): `src/stores/active-nav.ts` — `useActiveNav` store tracking the active Sidebar nav item ID. Consumed by HostShell to route PrimaryWorkArea to the correct library view.
+- **ADR-009** (2026-05-19): Sidecar `/assets` HTTP Query Surface. Locks `GET /assets` as the single sidecar query primitive for Epic 06; formally retires the "UI never speaks to sidecar directly" rule for read-only queries. See `docs/architecture/decisions/ADR-009-sidecar-assets-http-query-surface.md`.
+- **ADR-008** (2026-05-19): Front-Matter Parsing Strategy. Three-tier parser matching Claude Code's native `Bun.YAML.parse` + BC1 escape pre-processor behavior. See `docs/architecture/decisions/ADR-008-front-matter-parsing-strategy.md`.
+
+#### Changed
+
+- **NotificationsCenter time labels unified** (PR #38 — Story 6.15): `NotificationsCenter` now uses the canonical 7-bucket relative time labels (`formatRelativeTime` from `src/lib/format-relative-time.ts`) instead of a local inline formatter.
+- **Library view SSE subscriptions extracted** (PR #38 — Story 6.12): Inline SSE subscription logic in `AgentLibraryView` and `SkillLibraryView` replaced with `useLibrarySSE("agent", ...)` and `useLibrarySSE("skill", ...)` calls. No behavioral change.
+- **Library empty/error states extracted** (PR #38 — Story 6.13): Inline empty-state and error-state JSX extracted into `AgentLibraryView/empty-state.tsx`, `AgentLibraryView/error-state.tsx`, `SkillLibraryView/empty-state.tsx`, `SkillLibraryView/error-state.tsx`, and `LibraryStatePanel` shared primitive.
+
+#### Fixed
+
+- **Sidecar CORS headers** (PR #37 — hotfix commit): Added `Access-Control-Allow-Origin: *` and related CORS headers to all sidecar HTTP responses and preflight `OPTIONS` handling. Required because the Tauri WebView origin (`tauri://localhost` in production, `http://localhost:5173` in dev) differs from the sidecar's `127.0.0.1` origin. Source: `sidecar/src/index.ts` `CORS_HEADERS` constant.
+- **Sidecar-ready pub/sub race** (PR #37 — hotfix commit): `initSidecarClient()` now polls `sidecar_status` via IPC every 500 ms (up to 60 attempts) in parallel with the `sidecar-ready` event listener. Closes the race where Rust emits `sidecar-ready` before the React app finishes mounting + registering its listener. Source: `src/lib/sidecar-client.ts::pollSidecarStatusUntilRunning`.
+- **Library routes blocked by project-null gate** (PR #37 — hotfix commit): Library views (`/library/agents`, `/library/skills`) are now routed by HostShell before the project-null guard runs. Agent Library and Skill Library do not require an active project to render.
+- **`initSidecarClient()` not called at App mount** (PR #37 — hotfix commit): `App.tsx` now calls `initSidecarClient()` on mount. Without this call, `getSidecarBaseUrl()` always returned `null` and library queries never activated.
+- **HostShell library view wiring** (PR #37 — hotfix commit): `HostShell.tsx` now routes the `agents` and `skills` nav items to `AgentLibraryView` and `SkillLibraryView` respectively.
+- **Front-matter parser dead code and test isolation** (PR #38 — Story 6.11): Removed dead code from Sprint 3/4 front-matter parser (HIGH-1); canonicalized `ResourceKind` references (HIGH-2); eliminated test file shadow that allowed a mock to mask the production module (HIGH-3).
+
+### Sprint 4 (2026-05-18 → 2026-05-19)
+
+Sprint 4 completed Epic 03 (Stories 3.7–3.10): project-switch state persistence (Story 3.7), library SSE invalidation event-router (Story 3.8), Tauri project-management commands (Story 3.9), and Epic 03 IPC contract lock (Story 3.10, ADR-007). 49 net-new Vitest tests (467→516); 30/30 Rust tests passing. Carryovers CR-1, CR-5, CR-6 resolved; CR-2 dismissed. Close-out memo at `docs/stories/epic-03/SPRINT-4-CLOSEOUT.md`.
+
 ### Sprint 3 (2026-05-15 → ongoing)
 
 #### Removed
@@ -109,4 +150,4 @@ Sprint 1 established the foundational monorepo scaffold, the Tauri shell and sid
 
 ---
 
-_Last reviewed: 2026-05-15 by tech-writer agent against Sprint 2 (Stories 2.1–2.13, 2.22–2.26; ADR-004)._
+_Last reviewed: 2026-05-20 by tech-writer agent against Sprint 5 (Stories 6.1–6.3, 6.11–6.15; ADR-008, ADR-009) and Sprint 4 summary (Stories 3.7–3.10; ADR-007)._
