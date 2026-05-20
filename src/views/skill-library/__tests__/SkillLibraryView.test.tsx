@@ -29,8 +29,8 @@ import { SkillLibraryView } from "../SkillLibraryView";
 // Global stubs (must be set before any module imports that reference them)
 // ---------------------------------------------------------------------------
 
-// EventSource is not available in JSDOM — stub it globally so useSkillLibrarySSE
-// does not throw "EventSource is not defined" on mount.
+// EventSource is not available in JSDOM — stub it globally so the SSE-invalidation
+// hook (useLibrarySSE) does not throw "EventSource is not defined" on mount.
 // The captured handler is exposed via `capturedMessageHandler` for SSE tests.
 let capturedMessageHandler: ((e: MessageEvent) => void) | null = null;
 

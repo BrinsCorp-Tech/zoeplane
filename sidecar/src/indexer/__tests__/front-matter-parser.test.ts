@@ -25,7 +25,13 @@ import { readFileSync, readdirSync, statSync, realpathSync } from "node:fs";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { createRequire } from "node:module";
-import { parseFrontMatter, preprocess, extractFields, setYamlParser } from "../front-matter-parser";
+import {
+  parseFrontMatter,
+  preprocess,
+  extractFields,
+  setYamlParser,
+  extractRawYamlBlock,
+} from "../front-matter-parser";
 
 // ---------------------------------------------------------------------------
 // YAML parser injection for Node/Vitest workers
@@ -59,15 +65,6 @@ const FIXTURES_DIR = join(__dirname, "fixtures", "front-matter");
 
 function readFixture(filename: string): string {
   return readFileSync(join(FIXTURES_DIR, filename), "utf-8");
-}
-
-/**
- * Extract the raw YAML block content from between the first pair of --- delimiters.
- * Mirrors the extraction gray-matter performs before calling the custom engine.
- */
-function extractRawYamlBlock(content: string): string {
-  const m = content.match(/^---\s*\n([\s\S]*?)---\s*\n?/);
-  return m ? (m[1] ?? "") : "";
 }
 
 // ---------------------------------------------------------------------------
@@ -164,6 +161,7 @@ describe("Bucket 2 — synthetic fixtures", () => {
     it("returns mode=raw with correct data", () => {
       const content = readFixture("tier-1-clean.md");
       const raw = extractRawYamlBlock(content);
+      if (raw === null) throw new Error("tier-1-clean.md: expected front-matter delimiters");
       const result = parseFrontMatter(raw);
 
       expect(result.mode).toBe("raw");
@@ -183,6 +181,8 @@ describe("Bucket 2 — synthetic fixtures", () => {
     it("returns mode=preprocessed when description contains colon-space bigram", () => {
       const content = readFixture("tier-2-colon-in-description.md");
       const raw = extractRawYamlBlock(content);
+      if (raw === null)
+        throw new Error("tier-2-colon-in-description.md: expected front-matter delimiters");
       const result = parseFrontMatter(raw);
 
       expect(result.mode).toBe("preprocessed");
@@ -196,6 +196,8 @@ describe("Bucket 2 — synthetic fixtures", () => {
     it("Tier 1 fails on raw block (colon-space breaks strict YAML)", () => {
       const content = readFixture("tier-2-colon-in-description.md");
       const raw = extractRawYamlBlock(content);
+      if (raw === null)
+        throw new Error("tier-2-colon-in-description.md: expected front-matter delimiters");
       // Verify that the raw block actually fails Tier 1 alone.
       expect(() => Bun.YAML.parse(raw)).toThrow();
     });
@@ -209,6 +211,8 @@ describe("Bucket 2 — synthetic fixtures", () => {
     it("returns mode=preprocessed when description contains **Term**: markdown bold", () => {
       const content = readFixture("tier-2-markdown-bold-colon.md");
       const raw = extractRawYamlBlock(content);
+      if (raw === null)
+        throw new Error("tier-2-markdown-bold-colon.md: expected front-matter delimiters");
       const result = parseFrontMatter(raw);
 
       expect(result.mode).toBe("preprocessed");
@@ -236,6 +240,7 @@ describe("Bucket 2 — synthetic fixtures", () => {
     it("returns non-null data with correct name field (sigils are handled by Bun.YAML)", () => {
       const content = readFixture("tier-2-yaml-sigil.md");
       const raw = extractRawYamlBlock(content);
+      if (raw === null) throw new Error("tier-2-yaml-sigil.md: expected front-matter delimiters");
       const result = parseFrontMatter(raw);
 
       // Bun.YAML is lenient with most YAML sigil characters in plain scalars,
@@ -265,6 +270,8 @@ describe("Bucket 2 — synthetic fixtures", () => {
     it("parses successfully without double-escaping the already-quoted value", () => {
       const content = readFixture("tier-2-already-quoted.md");
       const raw = extractRawYamlBlock(content);
+      if (raw === null)
+        throw new Error("tier-2-already-quoted.md: expected front-matter delimiters");
       const result = parseFrontMatter(raw);
 
       // Value is pre-quoted, so Tier 1 may succeed (Bun.YAML handles quoted strings fine).
@@ -287,6 +294,8 @@ describe("Bucket 2 — synthetic fixtures", () => {
     it("returns mode=fallback with partial data and front-matter-fallback-extraction warning", () => {
       const content = readFixture("tier-3-malformed-yaml-recoverable.md");
       const raw = extractRawYamlBlock(content);
+      if (raw === null)
+        throw new Error("tier-3-malformed-yaml-recoverable.md: expected front-matter delimiters");
       const result = parseFrontMatter(raw);
 
       expect(result.mode).toBe("fallback");
@@ -301,6 +310,8 @@ describe("Bucket 2 — synthetic fixtures", () => {
     it("Tier 3 data contains only allowlisted fields", () => {
       const content = readFixture("tier-3-malformed-yaml-recoverable.md");
       const raw = extractRawYamlBlock(content);
+      if (raw === null)
+        throw new Error("tier-3-malformed-yaml-recoverable.md: expected front-matter delimiters");
       const result = parseFrontMatter(raw);
 
       if (result.data !== null) {
@@ -328,6 +339,8 @@ describe("Bucket 2 — synthetic fixtures", () => {
     it("returns mode=failed with null data when all three tiers fail", () => {
       const content = readFixture("tier-3-no-extractable-fields.md");
       const raw = extractRawYamlBlock(content);
+      if (raw === null)
+        throw new Error("tier-3-no-extractable-fields.md: expected front-matter delimiters");
       const result = parseFrontMatter(raw);
 
       expect(result.mode).toBe("failed");
@@ -341,11 +354,11 @@ describe("Bucket 2 — synthetic fixtures", () => {
   // -------------------------------------------------------------------------
 
   describe("no-delimiters.md", () => {
-    it("extractRawYamlBlock returns empty string for a file with no --- delimiters", () => {
+    it("extractRawYamlBlock returns null for a file with no --- delimiters", () => {
       const content = readFixture("no-delimiters.md");
       const raw = extractRawYamlBlock(content);
-      // No front-matter block to extract.
-      expect(raw).toBe("");
+      // No front-matter block to extract — production returns null (not "").
+      expect(raw).toBeNull();
     });
 
     it("parseFrontMatter on an empty string returns mode=failed", () => {

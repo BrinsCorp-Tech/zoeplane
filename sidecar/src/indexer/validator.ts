@@ -41,6 +41,7 @@ import { parseFrontMatter, extractRawYamlBlock } from "./front-matter-parser";
 import {
   VALIDATION_COMPLETED,
   ASSET_VALIDATION_UPDATED,
+  type ResourceKind,
   type ValidationCompletedEvent,
   type AssetValidationUpdatedEvent,
   type WatcherEvent,
@@ -57,8 +58,6 @@ const MAX_FILE_SIZE_BYTES = 1_048_576;
 // Per-kind recommended field warning rules
 // ---------------------------------------------------------------------------
 
-type ResourceKind = "skill" | "agent" | "command" | "team" | "workflow";
-
 interface WarningRule {
   /** Field name in front-matter. */
   field: string;
@@ -67,7 +66,7 @@ interface WarningRule {
 }
 
 /** Recommended fields per kind. Absence produces a `warnings` status. */
-const KIND_WARNING_RULES: Record<ResourceKind, WarningRule[]> = {
+const KIND_WARNING_RULES: Record<AssetKind, WarningRule[]> = {
   skill: [
     { field: "description", category: "missing-description" },
     { field: "version", category: "missing-version" },
@@ -223,7 +222,7 @@ async function loadGrayMatter(): Promise<MatterFn | null> {
  */
 async function parseAssetFile(
   sourcePath: string,
-  kind: ResourceKind,
+  kind: AssetKind,
   matter: MatterFn,
 ): Promise<ParseResult> {
   // --- Size guard (1 MB cap) ---
@@ -520,7 +519,7 @@ export async function runValidationPipeline(
   // --- Parse all files concurrently ---
   const parseResults = await Promise.all(
     assetRows.map(async (row) => {
-      const kind = row.kind as ResourceKind;
+      const kind = row.kind as AssetKind;
       const result = await parseAssetFile(row.source_path, kind, matter);
       return { id: row.id, result };
     }),
@@ -573,7 +572,7 @@ export async function runValidationPipeline(
  * the assets table, so they are explicitly excluded here to prevent silent
  * misrouting at compile time.
  */
-type AssetKind = Exclude<ResourceKind, never>; // all ResourceKind values are already non-hook
+type AssetKind = Exclude<ResourceKind, "hook">; // hooks live in hook_index, not in the assets table
 
 /**
  * Re-parse a single asset file and update its `validation_status` and

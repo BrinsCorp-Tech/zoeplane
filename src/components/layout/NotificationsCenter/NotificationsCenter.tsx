@@ -29,6 +29,7 @@
 import * as React from "react";
 import { ModalRoot, ModalContent, ModalTitle } from "@/components/ui/Modal/Modal";
 import { useNotificationsStore, type NotificationLevel } from "@/stores/notifications";
+import { formatRelativeTime } from "@/lib/format-relative-time";
 
 // ─── Styles ────────────────────────────────────────────────────────────────────
 
@@ -73,23 +74,6 @@ const LEVEL_LABEL: Record<NotificationLevel, string> = {
   error: "Error",
   quarantine: "Quarantine",
 };
-
-/**
- * Format a Unix timestamp (ms) as a relative time string.
- * Simple impl — no i18n required in Sprint 2.
- */
-function formatRelativeTime(timestamp: number): string {
-  const diffMs = Date.now() - timestamp;
-  const diffSec = Math.floor(diffMs / 1000);
-  const diffMin = Math.floor(diffSec / 60);
-  const diffHr = Math.floor(diffMin / 60);
-  const diffDay = Math.floor(diffHr / 24);
-
-  if (diffSec < 60) return "just now";
-  if (diffMin < 60) return `${diffMin}m ago`;
-  if (diffHr < 24) return `${diffHr}h ago`;
-  return `${diffDay}d ago`;
-}
 
 // ─── NotificationsCenter ──────────────────────────────────────────────────────
 

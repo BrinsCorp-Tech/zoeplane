@@ -52,19 +52,9 @@ let _yamlParse: YamlParser = (s: string) => {
   return Bun.YAML.parse(s);
 };
 
+// Required by: __tests__/front-matter-parser.test.ts:49, __tests__/validator.test.ts:257
 export function setYamlParser(fn: YamlParser): void {
   _yamlParse = fn;
-}
-
-export function resetYamlParser(): void {
-  _yamlParse = (s: string) => {
-    if (typeof Bun === "undefined" || typeof Bun.YAML?.parse !== "function") {
-      throw new Error(
-        "Bun.YAML.parse unavailable; setYamlParser() must be called in non-Bun runtimes",
-      );
-    }
-    return Bun.YAML.parse(s);
-  };
 }
 
 // ---------------------------------------------------------------------------

@@ -42,7 +42,7 @@ import {
 } from "@/components/ui/Tooltip/Tooltip";
 import type { AssetSummary } from "@zoeplane/shared-types";
 import { derivePluginSource } from "./derive-plugin-source";
-import { formatRelativeTime } from "@/components/agent-card/format-relative-time";
+import { formatRelativeTime } from "@/lib/format-relative-time";
 
 // ---------------------------------------------------------------------------
 // EvaluatorStatusBadge state mapping (UX Design Handoff §EvaluatorStatusBadge)
