@@ -43,6 +43,9 @@ import { StatusBar } from "../StatusBar/StatusBar";
 import { CommandPalette } from "../CommandPalette/CommandPalette";
 import { NotificationsCenter } from "../NotificationsCenter/NotificationsCenter";
 import { useProject } from "@/hooks/useProject";
+import { useActiveNav } from "@/stores/active-nav";
+import { AgentLibraryView } from "@/views/agent-library/AgentLibraryView";
+import { SkillLibraryView } from "@/views/skill-library/SkillLibraryView";
 
 // ─── Types ─────────────────────────────────────────────────────────────────────
 
@@ -70,11 +73,12 @@ export interface HostShellProps {
  */
 export function HostShell({ children, className }: HostShellProps): React.ReactElement {
   const project = useProject();
+  const { activeItemId, setActiveItem } = useActiveNav();
 
   // ── Content area: what goes inside PrimaryWorkArea ──────────────────────────
 
   // If children are explicitly supplied (Storybook / testing), use them directly.
-  // Otherwise derive from project state.
+  // Otherwise derive from project state + active nav item.
   const primaryContent: React.ReactNode = React.useMemo(() => {
     if (children !== undefined) return children;
 
@@ -115,7 +119,19 @@ export function HostShell({ children, className }: HostShellProps): React.ReactE
       );
     }
 
-    // Project is open — Epic 03 route rendering wires into this slot.
+    // Project is open — render the active library view if a nav item is selected.
+    // Stories 6.2/6.3: Agents and Skills library views are wired here (Sprint 5).
+    // Other nav item IDs fall through to the Epic 03 placeholder until those
+    // views are shipped.
+    if (activeItemId === "agents") {
+      return <AgentLibraryView />;
+    }
+
+    if (activeItemId === "skills") {
+      return <SkillLibraryView />;
+    }
+
+    // Fallback: Epic 03 placeholder — unmapped nav item or no item selected.
     return (
       <div
         style={{
@@ -130,7 +146,7 @@ export function HostShell({ children, className }: HostShellProps): React.ReactE
         Project open — Epic 03 wires route rendering here.
       </div>
     );
-  }, [children, project]);
+  }, [children, project, activeItemId]);
 
   // ── Layout ────────────────────────────────────────────────────────────────────
 
@@ -165,7 +181,7 @@ export function HostShell({ children, className }: HostShellProps): React.ReactE
           display: "flex",
         }}
       >
-        <Sidebar />
+        <Sidebar activeItemId={activeItemId ?? undefined} onItemSelect={setActiveItem} />
       </div>
 
       {/* Content column: TabStrip + PrimaryWorkArea */}
