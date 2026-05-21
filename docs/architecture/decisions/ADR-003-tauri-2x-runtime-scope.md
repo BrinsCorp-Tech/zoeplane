@@ -42,6 +42,23 @@ The fix is structural: populate `app.fs_scope()` at app setup with the same cano
 
 5. **Capability `fs:scope` entries are retained even when no plugin built-in command is JS-exposed.** They serve as the documented source-of-truth allowlist (invariant 3) and as the IPC-dispatch gate for any future story that exposes a plugin built-in command (e.g., if Epic 04 plugin host SDK chooses to call `tauri-plugin-fs`'s built-in `read_file` IPC handler from JS rather than going through `commands::fs::fs_read_file`). Removing the entries because they appear "unused" by current commands would dismantle the documentation and the future-IPC-dispatch gate at the same time.
 
+### §3.5 Canonicalize-on-registration discipline (Amendment 2026-05-21)
+
+`tauri::fs::Scope::is_allowed` canonicalizes the queried path before pattern-matching (Tauri 2.11.1: `scope/fs.rs:347` → `try_resolve_symlink_and_canonicalize` → `std::fs::canonicalize`). The matching `Scope::allow_directory` API does NOT canonicalize the registered path — it stores it verbatim. When a registered path traverses a symlink (e.g., PAI's `~/.claude/skills → ~/Documents/.../pai-config/claude/skills` deployment topology), the canonicalized query path no longer matches the verbatim-registered pattern, and `is_allowed` returns false for every descendant.
+
+**Discipline:** every `allow_directory` call in `init_fs_scope` MUST canonicalize the registered path before registration, AND for any directory whose direct children may be symlinks (e.g., `~/.claude/*` on PAI deployments), `init_fs_scope` MUST walk those children, detect `is_symlink()`, and register the realpath target of each via an additional `allow_directory(realpath, true)` call. The §G integration test must include a symlinked-topology variant that exercises `is_allowed` for paths inside symlinked subtrees.
+
+**Why both directions:** canonicalize-on-registration handles the case where a top-level registered path is itself a symlink. The child-walk handles the case where a non-symlinked directory contains symlinked children (the PAI case). Together they cover both topologies in the deployment space.
+
+**Implications for §3 source-of-truth discipline:** the capability file (`fs:scope` allow list) remains the _semantic_ allowlist for security review. The runtime scope stores the _physical_ allowlist (canonicalized realpaths). The two describe the same on-disk content using different string forms when symlinks are present. The §G integration test bridges the two by asserting `is_allowed` for canonical-form queries; this contract is preserved.
+
+**Security note:** this discipline does NOT weaken the allowlist. The fix adds explicit realpaths to the registered scope (e.g., `~/Documents/.../pai-config/claude/...`) — paths that genuinely contain the user's `~/.claude` content via symlink. Out-of-scope realpaths (e.g., `/etc/passwd`) remain denied because they are not registered.
+
+**Implementation:** `lib.rs` exports two `pub(crate)` helpers that each own one half of the discipline:
+
+- `init_fs_scope(scope, paths)` — canonicalizes each path before calling `allow_directory`; called from `run().setup()` with the canonical allowlist.
+- `register_symlinked_children(scope, parent)` — walks `parent`'s direct children, detects `is_symlink()`, canonicalizes each symlink target, and calls `allow_directory(realpath, true)` for each. Called from `run().setup()` with `~/.claude` after `init_fs_scope` completes. No-op on non-PAI installs (no symlinks → no extra entries). Errors logged at WARN and skipped rather than propagated — a missing symlink target must not abort startup.
+
 ## Consequences
 
 **Positive:**

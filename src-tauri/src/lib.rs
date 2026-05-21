@@ -79,6 +79,13 @@ pub struct SidecarHandle {
 /// Paths must be pre-resolved via `app.path()` — dollar-prefixed shorthand
 /// (`$HOME`, `$APPDATA`, `$APP`) is only valid in capability files, not here.
 ///
+/// Each path is canonicalized before registration so that Tauri's
+/// `Scope::is_allowed` (which always canonicalizes the queried path before
+/// glob-matching) sees matching verbatim strings. Without this,
+/// `allow_directory` stores the logical path verbatim while `is_allowed`
+/// queries the canonical realpath — causing false denies when any registered
+/// path itself traverses a symlink. (ADR-003 §3.5)
+///
 /// Returns an error if any path fails to register, causing app startup to
 /// fail loud rather than booting with a partial (insecure) scope.
 pub(crate) fn init_fs_scope(
@@ -86,10 +93,15 @@ pub(crate) fn init_fs_scope(
     paths: &[PathBuf],
 ) -> Result<(), Box<dyn std::error::Error>> {
     for path in paths {
-        scope.allow_directory(path, true).map_err(|e| {
+        // Canonicalize-on-registration: resolve the physical path so the
+        // registered glob pattern matches what Scope::is_allowed will query.
+        // Falls back to the logical path if canonicalize fails (e.g., path
+        // does not yet exist — handled gracefully rather than crashing boot).
+        let canonical = std::fs::canonicalize(path).unwrap_or_else(|_| path.clone());
+        scope.allow_directory(&canonical, true).map_err(|e| {
             error!(
                 target: "fs-scope-init",
-                path = %path.display(),
+                path = %canonical.display(),
                 error = %e,
                 "Failed to register path on FS runtime scope — app startup aborted"
             );
@@ -97,9 +109,89 @@ pub(crate) fn init_fs_scope(
         })?;
         info!(
             target: "fs-scope-init",
-            path = %path.display(),
+            path = %canonical.display(),
             "FS runtime scope: path registered (recursive)"
         );
+    }
+    Ok(())
+}
+
+/// Walks the direct children of `parent` and registers the canonical realpath
+/// of any symlinked child directory on `scope` as a recursive allow entry.
+///
+/// This covers deployments where a non-symlinked directory (e.g., `~/.claude`)
+/// contains symlinked subdirectories (e.g., PAI's
+/// `~/.claude/skills → ~/Documents/.../pai-config/claude/skills`). Because
+/// `Scope::allow_directory(&claude_dir, true)` only registers the logical
+/// `~/.claude/**` pattern, a file physically located at the symlink target's
+/// realpath would not match — `is_allowed` canonicalizes before pattern-match
+/// but the pattern was registered verbatim. This function bridges the gap by
+/// explicitly registering each symlinked child's realpath. (ADR-003 §3.5)
+///
+/// - Non-symlinked children are skipped (already covered by the parent's
+///   recursive allow entry).
+/// - If `canonicalize` succeeds but yields the same path as the logical path
+///   (e.g., the symlink points to itself — degenerate case), the entry is
+///   skipped (already covered).
+/// - Errors are logged at WARN and skipped rather than propagated — a missing
+///   symlink target should not abort app startup; the affected path simply
+///   remains out-of-scope until the target is mounted/accessible.
+/// - The function is a no-op when `parent` has no symlinked children (the
+///   common non-PAI case).
+pub(crate) fn register_symlinked_children(
+    scope: &tauri::fs::Scope,
+    parent: &std::path::Path,
+) -> Result<(), Box<dyn std::error::Error>> {
+    if !parent.exists() {
+        return Ok(());
+    }
+    match std::fs::read_dir(parent) {
+        Ok(entries) => {
+            for entry in entries.flatten() {
+                let logical = entry.path();
+                if logical.is_symlink() {
+                    match std::fs::canonicalize(&logical) {
+                        Ok(real) if real != logical => {
+                            if let Err(e) = scope.allow_directory(&real, true) {
+                                warn!(
+                                    target: "fs-scope-init",
+                                    logical = %logical.display(),
+                                    real = %real.display(),
+                                    error = %e,
+                                    "Failed to register realpath of symlinked child — skipping"
+                                );
+                            } else {
+                                info!(
+                                    target: "fs-scope-init",
+                                    logical = %logical.display(),
+                                    real = %real.display(),
+                                    "FS runtime scope: symlinked child realpath registered (recursive)"
+                                );
+                            }
+                        }
+                        Ok(_) => {
+                            // Canonicalize was identity — already covered by parent registration.
+                        }
+                        Err(e) => {
+                            warn!(
+                                target: "fs-scope-init",
+                                logical = %logical.display(),
+                                error = %e,
+                                "Failed to canonicalize symlinked child — skipping"
+                            );
+                        }
+                    }
+                }
+            }
+        }
+        Err(e) => {
+            warn!(
+                target: "fs-scope-init",
+                path = %parent.display(),
+                error = %e,
+                "Failed to read directory during symlink-walk — skipping"
+            );
+        }
     }
     Ok(())
 }
@@ -242,6 +334,24 @@ pub fn run() {
                 );
                 e
             })?;
+
+            // ADR-003 §3.5: walk direct children of ~/.claude and register the
+            // realpath of any symlinked child directories. Covers PAI deployment
+            // topology where ~/.claude/skills (and similar) are symlinks into the
+            // PAI config tree — their canonical realpaths would not match the
+            // ~/.claude/** pattern registered above, causing is_allowed to deny.
+            // This is a no-op on non-PAI installs (no symlinks → no extra entries).
+            register_symlinked_children(&app.fs_scope(), &home_dir.join(".claude")).map_err(
+                |e| {
+                    error!(
+                        target: "fs-scope-init",
+                        error = %e,
+                        "Symlink-walk failed — aborting app setup"
+                    );
+                    e
+                },
+            )?;
+
             info!(
                 target: "fs-scope-init",
                 "FS runtime scope initialized — all canonical paths registered"
@@ -569,7 +679,7 @@ fn shutdown_sidecar(app: &AppHandle) {
 
 #[cfg(test)]
 mod fs_scope_tests {
-    use super::init_fs_scope;
+    use super::{init_fs_scope, register_symlinked_children};
     use std::path::PathBuf;
     use tauri::utils::config::FsScope;
     use tracing_test::traced_test;
@@ -748,6 +858,127 @@ mod fs_scope_tests {
         assert!(
             !ancestor_allowed,
             "ancestor probe must return denied for nonexistent file outside all in-scope dirs"
+        );
+    }
+
+    // ADR-003 §3.5 — symlinked-topology integration test.
+    //
+    // Exercises `register_symlinked_children` against a real tmpdir topology that
+    // mirrors the PAI deployment case:
+    //   claude_dir/.claude/skills → real_dir/skills/  (symlink)
+    //   real_dir/skills/test/SKILL.md                  (real file)
+    //
+    // Asserts that `is_allowed` returns true for the real file (via its canonical
+    // realpath) after `register_symlinked_children` registers the symlink target.
+    // Also asserts that a genuinely out-of-scope path remains denied — proving the
+    // fix does not weaken the allowlist boundary.
+    //
+    // Gated with #[cfg(unix)] because `std::os::unix::fs::symlink` is Unix-only.
+    // Windows CI (if added) will skip this test; Windows users receive the same
+    // fix via the parent init_fs_scope canonicalize-on-registration path because
+    // NTFS junctions are resolved by `std::fs::canonicalize` on Windows.
+    #[test]
+    #[cfg(unix)]
+    fn symlinked_child_is_allowed_after_register_symlinked_children() {
+        use std::os::unix::fs::symlink;
+
+        let app = tauri::test::mock_app();
+        let scope = tauri::scope::fs::Scope::new(&app, &FsScope::default())
+            .expect("Scope::new must succeed");
+
+        // Build a synthetic ~/.claude topology in two separate tempdirs so the
+        // symlink genuinely crosses directory boundaries (as in production).
+        let claude_tmp = tempfile::tempdir().expect("create claude tmpdir");
+        let real_tmp = tempfile::tempdir().expect("create real-content tmpdir");
+
+        // real_tmp/skills/ — the symlink target.
+        let real_skills = real_tmp.path().join("skills");
+        std::fs::create_dir_all(&real_skills).expect("create real skills dir");
+
+        // Write a real file inside the symlink target.
+        let real_file = real_skills.join("test").join("SKILL.md");
+        std::fs::create_dir_all(real_file.parent().unwrap()).expect("create test subdir");
+        std::fs::write(&real_file, "# Test Skill").expect("write SKILL.md");
+
+        // claude_tmp/.claude/ — the logical parent (mirrors ~/.claude).
+        let claude_dot = claude_tmp.path().join(".claude");
+        std::fs::create_dir_all(&claude_dot).expect("create .claude dir");
+
+        // claude_tmp/.claude/skills → real_tmp/skills/  (symlink).
+        let logical_skills = claude_dot.join("skills");
+        symlink(&real_skills, &logical_skills).expect("create skills symlink");
+
+        // Register the logical .claude dir via init_fs_scope (as production does).
+        // This stores the verbatim logical path — without register_symlinked_children
+        // the realpath of real_file would NOT be matched.
+        init_fs_scope(&scope, std::slice::from_ref(&claude_dot))
+            .expect("init_fs_scope must succeed");
+
+        // Precondition: without symlink-child registration, is_allowed on the
+        // canonical realpath of the real file returns false.
+        // (init_fs_scope now canonicalizes the registered path, so if claude_dot
+        // itself is not a symlink its canonical == logical and real_file's realpath
+        // still doesn't match the registered ~/<claude_tmp>/.claude/** pattern
+        // because the query canonicalizes through the symlink to real_tmp.)
+        let canonical_real_file =
+            std::fs::canonicalize(&real_file).expect("canonicalize real_file");
+        // The canonical path goes through real_tmp, NOT claude_tmp — so it should
+        // NOT be allowed yet (the registered pattern is claude_tmp/.claude/**).
+        // If it is already allowed (e.g., tmpdir happens to coincide), the test
+        // is still valid — the call below is the load-bearing assertion.
+        let _ = scope.is_allowed(&canonical_real_file); // pre-condition check (informational)
+
+        // Act: register symlinked children.
+        register_symlinked_children(&scope, &claude_dot)
+            .expect("register_symlinked_children must succeed");
+
+        // Assert: canonical realpath of the file inside the symlinked subtree is now allowed.
+        assert!(
+            scope.is_allowed(&canonical_real_file),
+            "canonical realpath inside symlinked child must be allowed after register_symlinked_children"
+        );
+
+        // Assert: out-of-scope path remains denied — fix does not weaken boundary.
+        let out_of_scope = tempfile::tempdir().expect("create out-of-scope tmpdir");
+        let out_of_scope_file = out_of_scope.path().join("secret.txt");
+        std::fs::write(&out_of_scope_file, "sensitive").expect("write out-of-scope file");
+        assert!(
+            !scope.is_allowed(&out_of_scope_file),
+            "out-of-scope path must remain denied after symlink registration"
+        );
+    }
+
+    // ADR-003 §3.5 — non-symlinked topology is a no-op.
+    //
+    // Confirms that `register_symlinked_children` on a directory with no symlinked
+    // children neither errors nor registers additional scope entries (the pre-existing
+    // allowed path count is unchanged).
+    #[test]
+    #[cfg(unix)]
+    fn register_symlinked_children_is_noop_for_plain_directory() {
+        let app = tauri::test::mock_app();
+        let scope = tauri::scope::fs::Scope::new(&app, &FsScope::default())
+            .expect("Scope::new must succeed");
+
+        let tmp = tempfile::tempdir().expect("create tmpdir");
+        // Populate with regular (non-symlinked) children.
+        std::fs::create_dir_all(tmp.path().join("agents")).expect("create agents dir");
+        std::fs::create_dir_all(tmp.path().join("commands")).expect("create commands dir");
+
+        // Register the parent via init_fs_scope first.
+        init_fs_scope(&scope, &[tmp.path().to_path_buf()]).expect("init_fs_scope must succeed");
+
+        let allowed_before = scope.allowed_patterns().len();
+
+        // Act: walk children — no symlinks present, so nothing extra registered.
+        register_symlinked_children(&scope, tmp.path())
+            .expect("register_symlinked_children must succeed on plain directory");
+
+        let allowed_after = scope.allowed_patterns().len();
+
+        assert_eq!(
+            allowed_before, allowed_after,
+            "allowed_patterns count must be unchanged for plain (non-symlinked) directory"
         );
     }
 }
