@@ -6,10 +6,13 @@
  *   - edit: renders labeled form fields with inline per-field validation
  *
  * Field schema (skills v1 per ux-spec §7.6 Section 1):
- *   name         — required; kebab-case; ≤64 chars
- *   description  — recommended; ≤256 chars
+ *   name         — required; letters/digits/hyphens; ≤64 chars
+ *   description  — recommended; free-form (Claude Code uses this as a
+ *                  semantic-discovery surface; auto-loaded skills like
+ *                  Orchestration ship descriptions in the thousands of chars)
  *   version      — recommended; soft semver-ish validation
- *   voice_id     — optional; length 5-32 if present
+ *   voice_id     — optional; free-form when present (placeholder `TBD` is a
+ *                  documented PAI convention for "voice not yet selected")
  *   voice_name   — optional; ≤64 chars if present
  *   color        — optional; #rrggbb hex OR free-form palette token
  *   model        — optional; free-form
@@ -98,7 +101,10 @@ const KNOWN_FIELDS: readonly (keyof FrontMatterErrors)[] = [
 // Validation helpers
 // ---------------------------------------------------------------------------
 
-const NAME_RE = /^[a-z0-9][a-z0-9-]*$/;
+// Claude Code skills ship with both kebab-case (`code-reviewer`) and
+// CapitalCase (`CORE`, `Orchestration`) names — both are valid on disk and
+// the editor must round-trip either without rejecting existing values.
+const NAME_RE = /^[A-Za-z0-9][A-Za-z0-9-]*$/;
 const SEMVER_RE = /^\d+\.\d+\.\d+/;
 const HEX_COLOR_RE = /^#[0-9a-fA-F]{6}$/;
 
@@ -114,16 +120,15 @@ export function validateFrontMatter(data: SkillFrontMatter): FrontMatterErrors {
   if (!name) {
     errors.name = "Name is required.";
   } else if (!NAME_RE.test(name)) {
-    errors.name = "Name must be lowercase kebab-case (e.g. my-skill).";
+    errors.name = "Name may contain letters, digits, and hyphens (e.g. my-skill or CORE).";
   } else if (name.length > 64) {
     errors.name = "Name must be 64 characters or fewer.";
   }
 
-  // description — ≤256 chars
-  const description = data.description ?? "";
-  if (typeof description === "string" && description.length > 256) {
-    errors.description = "Description must be 256 characters or fewer.";
-  }
+  // description — free-form. Claude Code uses this field as the semantic-
+  // discovery surface for skill/agent auto-loading; auto-loaded skills like
+  // Orchestration ship descriptions in the thousands of chars. The asset
+  // index stores it as unconstrained TEXT — no backend cap to mirror.
 
   // version — soft semver warning
   const version = data.version ?? "";
@@ -131,13 +136,10 @@ export function validateFrontMatter(data: SkillFrontMatter): FrontMatterErrors {
     errors.version = "Version should follow semver format (e.g. 1.0.0).";
   }
 
-  // voice_id — optional; length 5–32 if present
-  const voice_id = data.voice_id ?? "";
-  if (typeof voice_id === "string" && voice_id.length > 0) {
-    if (voice_id.length < 5 || voice_id.length > 32) {
-      errors.voice_id = "Voice ID must be between 5 and 32 characters.";
-    }
-  }
+  // voice_id — free-form when present. PAI agents in the wild use the literal
+  // `TBD` (3 chars) as a "voice not yet selected" placeholder; ElevenLabs
+  // voice IDs are typically 20 chars. Until a voice-catalog validator exists,
+  // accept anything non-empty so existing files round-trip.
 
   // voice_name — optional; ≤64 chars if present
   const voice_name = data.voice_name ?? "";
@@ -371,7 +373,7 @@ export function FrontMatterForm({
         <EditField
           fieldKey="name"
           label="Name"
-          helperText="Lowercase kebab-case, e.g. my-skill. Max 64 characters."
+          helperText="Letters, digits, and hyphens. e.g. my-skill or CORE. Max 64 characters."
           required
           error={fieldError("name")}
           value={str(value.name)}
@@ -387,7 +389,7 @@ export function FrontMatterForm({
         <EditField
           fieldKey="description"
           label="Description"
-          helperText="A short summary shown in the Skills library. Max 256 characters."
+          helperText="Shown in the Skills library. Claude Code uses this for semantic discovery — be specific."
           error={fieldError("description")}
           value={str(value.description)}
           disabled={disabled}
@@ -444,7 +446,7 @@ export function FrontMatterForm({
           <EditField
             fieldKey="voice_id"
             label="Voice ID"
-            helperText="ElevenLabs voice ID. 5–32 characters."
+            helperText="ElevenLabs voice ID, or `TBD` if not yet selected."
             error={fieldError("voice_id")}
             value={str(value.voice_id)}
             disabled={disabled}
