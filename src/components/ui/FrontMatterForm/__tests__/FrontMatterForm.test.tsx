@@ -9,6 +9,8 @@
  *   - Read mode renders known fields
  *   - Edit mode renders labeled inputs
  *   - Validation: name required / letter-digit-hyphen / max length
+ *   - Validation: description free-form (Claude Code discovery surface)
+ *   - Validation: voice_id free-form (PAI `TBD` placeholder accepted)
  *   - Unknown fields preserved through onChange
  *   - Unknown fields shown as read-only in edit mode
  *   - validateFrontMatter helper — all field constraints
@@ -73,10 +75,12 @@ describe("validateFrontMatter", () => {
     expect(errors.name).toBeUndefined();
   });
 
-  it("rejects description longer than 256 chars", () => {
-    const errors = validateFrontMatter({ name: "x", description: "a".repeat(257) });
-    expect(errors.description).toBeDefined();
-    expect(errors.description).toContain("256");
+  it("accepts arbitrarily long descriptions (Claude Code discovery surface)", () => {
+    // Auto-loaded Orchestration skill ships with ~6,800-char description;
+    // there is no backend cap and no real-world bound on this field.
+    expect(
+      validateFrontMatter({ name: "x", description: "a".repeat(10_000) }).description,
+    ).toBeUndefined();
   });
 
   it("soft-warns on non-semver version", () => {
@@ -94,21 +98,16 @@ describe("validateFrontMatter", () => {
     expect(errors.version).toBeUndefined();
   });
 
-  it("rejects voice_id shorter than 5 chars", () => {
-    const errors = validateFrontMatter({ name: "x", voice_id: "abc" });
-    expect(errors.voice_id).toBeDefined();
-    expect(errors.voice_id).toContain("5");
+  it("accepts the PAI `TBD` voice_id placeholder", () => {
+    // 3 of 14 installed PAI agents use `voice_id: TBD` as a documented
+    // "voice not yet selected" marker. Editing must round-trip these.
+    expect(validateFrontMatter({ name: "x", voice_id: "TBD" }).voice_id).toBeUndefined();
   });
 
-  it("rejects voice_id longer than 32 chars", () => {
-    const errors = validateFrontMatter({ name: "x", voice_id: "a".repeat(33) });
-    expect(errors.voice_id).toBeDefined();
-    expect(errors.voice_id).toContain("32");
-  });
-
-  it("accepts valid voice_id length", () => {
-    const errors = validateFrontMatter({ name: "x", voice_id: "abc12" });
-    expect(errors.voice_id).toBeUndefined();
+  it("accepts typical ElevenLabs voice_id (20 chars)", () => {
+    expect(
+      validateFrontMatter({ name: "x", voice_id: "D11AWvkESE7DJwqIVi7L" }).voice_id,
+    ).toBeUndefined();
   });
 
   it("rejects invalid hex color with # prefix", () => {

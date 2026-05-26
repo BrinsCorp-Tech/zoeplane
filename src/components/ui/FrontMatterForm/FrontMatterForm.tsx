@@ -7,9 +7,12 @@
  *
  * Field schema (skills v1 per ux-spec §7.6 Section 1):
  *   name         — required; letters/digits/hyphens; ≤64 chars
- *   description  — recommended; ≤256 chars
+ *   description  — recommended; free-form (Claude Code uses this as a
+ *                  semantic-discovery surface; auto-loaded skills like
+ *                  Orchestration ship descriptions in the thousands of chars)
  *   version      — recommended; soft semver-ish validation
- *   voice_id     — optional; length 5-32 if present
+ *   voice_id     — optional; free-form when present (placeholder `TBD` is a
+ *                  documented PAI convention for "voice not yet selected")
  *   voice_name   — optional; ≤64 chars if present
  *   color        — optional; #rrggbb hex OR free-form palette token
  *   model        — optional; free-form
@@ -122,11 +125,10 @@ export function validateFrontMatter(data: SkillFrontMatter): FrontMatterErrors {
     errors.name = "Name must be 64 characters or fewer.";
   }
 
-  // description — ≤256 chars
-  const description = data.description ?? "";
-  if (typeof description === "string" && description.length > 256) {
-    errors.description = "Description must be 256 characters or fewer.";
-  }
+  // description — free-form. Claude Code uses this field as the semantic-
+  // discovery surface for skill/agent auto-loading; auto-loaded skills like
+  // Orchestration ship descriptions in the thousands of chars. The asset
+  // index stores it as unconstrained TEXT — no backend cap to mirror.
 
   // version — soft semver warning
   const version = data.version ?? "";
@@ -134,13 +136,10 @@ export function validateFrontMatter(data: SkillFrontMatter): FrontMatterErrors {
     errors.version = "Version should follow semver format (e.g. 1.0.0).";
   }
 
-  // voice_id — optional; length 5–32 if present
-  const voice_id = data.voice_id ?? "";
-  if (typeof voice_id === "string" && voice_id.length > 0) {
-    if (voice_id.length < 5 || voice_id.length > 32) {
-      errors.voice_id = "Voice ID must be between 5 and 32 characters.";
-    }
-  }
+  // voice_id — free-form when present. PAI agents in the wild use the literal
+  // `TBD` (3 chars) as a "voice not yet selected" placeholder; ElevenLabs
+  // voice IDs are typically 20 chars. Until a voice-catalog validator exists,
+  // accept anything non-empty so existing files round-trip.
 
   // voice_name — optional; ≤64 chars if present
   const voice_name = data.voice_name ?? "";
