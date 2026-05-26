@@ -8,7 +8,7 @@
  * Covers:
  *   - Read mode renders known fields
  *   - Edit mode renders labeled inputs
- *   - Validation: name required / kebab-case / max length
+ *   - Validation: name required / letter-digit-hyphen / max length
  *   - Unknown fields preserved through onChange
  *   - Unknown fields shown as read-only in edit mode
  *   - validateFrontMatter helper — all field constraints
@@ -45,15 +45,21 @@ describe("validateFrontMatter", () => {
     expect(errors.name).toContain("required");
   });
 
-  it("rejects name with uppercase letters", () => {
-    const errors = validateFrontMatter({ name: "MySkill" });
-    expect(errors.name).toBeDefined();
-    expect(errors.name).toContain("kebab-case");
+  it("accepts CapitalCase name (Claude Code convention, e.g. CORE)", () => {
+    expect(validateFrontMatter({ name: "CORE" }).name).toBeUndefined();
+    expect(validateFrontMatter({ name: "Orchestration" }).name).toBeUndefined();
+    expect(validateFrontMatter({ name: "MySkill" }).name).toBeUndefined();
   });
 
   it("rejects name starting with hyphen", () => {
     const errors = validateFrontMatter({ name: "-skill" });
     expect(errors.name).toBeDefined();
+  });
+
+  it("rejects name containing spaces or special characters", () => {
+    expect(validateFrontMatter({ name: "my skill" }).name).toBeDefined();
+    expect(validateFrontMatter({ name: "my.skill" }).name).toBeDefined();
+    expect(validateFrontMatter({ name: "my_skill" }).name).toBeDefined();
   });
 
   it("rejects name longer than 64 chars", () => {

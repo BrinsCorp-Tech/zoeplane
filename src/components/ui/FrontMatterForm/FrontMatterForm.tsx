@@ -6,7 +6,7 @@
  *   - edit: renders labeled form fields with inline per-field validation
  *
  * Field schema (skills v1 per ux-spec §7.6 Section 1):
- *   name         — required; kebab-case; ≤64 chars
+ *   name         — required; letters/digits/hyphens; ≤64 chars
  *   description  — recommended; ≤256 chars
  *   version      — recommended; soft semver-ish validation
  *   voice_id     — optional; length 5-32 if present
@@ -98,7 +98,10 @@ const KNOWN_FIELDS: readonly (keyof FrontMatterErrors)[] = [
 // Validation helpers
 // ---------------------------------------------------------------------------
 
-const NAME_RE = /^[a-z0-9][a-z0-9-]*$/;
+// Claude Code skills ship with both kebab-case (`code-reviewer`) and
+// CapitalCase (`CORE`, `Orchestration`) names — both are valid on disk and
+// the editor must round-trip either without rejecting existing values.
+const NAME_RE = /^[A-Za-z0-9][A-Za-z0-9-]*$/;
 const SEMVER_RE = /^\d+\.\d+\.\d+/;
 const HEX_COLOR_RE = /^#[0-9a-fA-F]{6}$/;
 
@@ -114,7 +117,7 @@ export function validateFrontMatter(data: SkillFrontMatter): FrontMatterErrors {
   if (!name) {
     errors.name = "Name is required.";
   } else if (!NAME_RE.test(name)) {
-    errors.name = "Name must be lowercase kebab-case (e.g. my-skill).";
+    errors.name = "Name may contain letters, digits, and hyphens (e.g. my-skill or CORE).";
   } else if (name.length > 64) {
     errors.name = "Name must be 64 characters or fewer.";
   }
@@ -371,7 +374,7 @@ export function FrontMatterForm({
         <EditField
           fieldKey="name"
           label="Name"
-          helperText="Lowercase kebab-case, e.g. my-skill. Max 64 characters."
+          helperText="Letters, digits, and hyphens. e.g. my-skill or CORE. Max 64 characters."
           required
           error={fieldError("name")}
           value={str(value.name)}
