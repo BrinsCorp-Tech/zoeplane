@@ -389,7 +389,7 @@ export function FrontMatterForm({
         <EditField
           fieldKey="description"
           label="Description"
-          helperText="A short summary shown in the Skills library. Max 256 characters."
+          helperText="Shown in the Skills library. Claude Code uses this for semantic discovery — be specific."
           error={fieldError("description")}
           value={str(value.description)}
           disabled={disabled}
@@ -446,7 +446,7 @@ export function FrontMatterForm({
           <EditField
             fieldKey="voice_id"
             label="Voice ID"
-            helperText="ElevenLabs voice ID. 5–32 characters."
+            helperText="ElevenLabs voice ID, or `TBD` if not yet selected."
             error={fieldError("voice_id")}
             value={str(value.voice_id)}
             disabled={disabled}
