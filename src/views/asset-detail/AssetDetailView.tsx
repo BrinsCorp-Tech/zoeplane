@@ -1,5 +1,5 @@
 /**
- * SkillDetailView — read-mode view for a single skill.
+ * AssetDetailView — read-mode view for a single skill or agent.
  *
  * Layout:
  *   Header (sticky): ← Back | <h1>name</h1> | [Reveal (disabled)] [Edit]
@@ -18,7 +18,7 @@
  *   1. Layout: stacked single-column (NOT two-pane)
  *   2. "Reveal in Finder" disabled with "Coming soon" tooltip (scope Story 6.9)
  *
- * Story: 6.4 — Skill Detail + Skill Editor (FR-003)
+ * Story: 6.16 — Asset Detail+Editor Kind-Parameterized Refactor (FR-003, FR-010)
  */
 
 import * as React from "react";
@@ -33,9 +33,9 @@ import {
   TooltipContent,
 } from "@/components/ui/Tooltip/Tooltip";
 import { FrontMatterForm } from "@/components/ui/FrontMatterForm/FrontMatterForm";
-import type { SkillFrontMatter } from "@/components/ui/FrontMatterForm/FrontMatterForm";
-import { useSkillNav } from "@/stores/skill-nav";
-import { SkillDetailLoadingSkeleton } from "./loading-skeleton";
+import type { AssetFrontMatter } from "@/components/ui/FrontMatterForm/FrontMatterForm";
+import { useAssetNav } from "@/stores/asset-nav";
+import { AssetDetailLoadingSkeleton } from "./loading-skeleton";
 import type { AssetSummary } from "@zoeplane/shared-types";
 import { getSidecarBaseUrl } from "@/lib/sidecar-client";
 
@@ -44,10 +44,10 @@ import { getSidecarBaseUrl } from "@/lib/sidecar-client";
 // ---------------------------------------------------------------------------
 
 /**
- * Parse a skill file's content into { frontMatter, body }.
+ * Parse an asset file's content into { frontMatter, body }.
  * Returns null if the file has no front-matter delimiters.
  */
-function parseSkillContent(raw: string): { frontMatter: SkillFrontMatter; body: string } | null {
+function parseAssetContent(raw: string): { frontMatter: AssetFrontMatter; body: string } | null {
   // CRLF → LF at entry (feedback_text_content_crlf_normalize.md)
   const normalized = raw.replace(/\r\n/g, "\n");
 
@@ -62,7 +62,7 @@ function parseSkillContent(raw: string): { frontMatter: SkillFrontMatter; body: 
   // For display purposes we parse the raw YAML block ourselves here.
   // The sidecar already has the parsed front_matter_json via the assets API;
   // here we parse the raw file for the editor flow.
-  let frontMatter: SkillFrontMatter = {};
+  let frontMatter: AssetFrontMatter = {};
   try {
     // Use the stored front_matter_json from the asset if available (set by caller).
     // If not, do a best-effort simple parse for display.
@@ -92,19 +92,19 @@ function parseSkillContent(raw: string): { frontMatter: SkillFrontMatter; body: 
 }
 
 // ---------------------------------------------------------------------------
-// SkillDetailView
+// AssetDetailView
 // ---------------------------------------------------------------------------
 
-const DETAIL_HEADING_ID = "skill-detail-heading";
+const DETAIL_HEADING_ID = "asset-detail-heading";
 
-export function SkillDetailView(): React.JSX.Element {
-  const { selectedSkillId, edit, back } = useSkillNav();
+export function AssetDetailView(): React.JSX.Element {
+  const { kind, selectedAssetId, edit, back } = useAssetNav();
 
   // Asset data fetched from sidecar OR passed down via TanStack Query cache
-  // For simplicity, we refetch from the assets API using the selectedSkillId
+  // For simplicity, we refetch from the assets API using the selectedAssetId
   const [asset, setAsset] = React.useState<AssetSummary | null>(null);
   const [parsed, setParsed] = React.useState<{
-    frontMatter: SkillFrontMatter;
+    frontMatter: AssetFrontMatter;
     body: string;
   } | null>(null);
   const [loadState, setLoadState] = React.useState<
@@ -127,9 +127,9 @@ export function SkillDetailView(): React.JSX.Element {
     };
   }, [edit]);
 
-  // Load the skill file via fs_read_file (Tauri command)
+  // Load the asset file via fs_read_file (Tauri command)
   React.useEffect(() => {
-    if (!selectedSkillId) {
+    if (!selectedAssetId) {
       setLoadState("error-not-found");
       return;
     }
@@ -142,8 +142,8 @@ export function SkillDetailView(): React.JSX.Element {
         // Use local variables — do NOT read React state after an await.
         // The `asset` state variable is still null from the render that registered
         // this effect; reading it after the fetch would be a stale-closure bug.
-        let resolvedPath: string | null = selectedSkillId.includes("/")
-          ? selectedSkillId // looks like a path already
+        let resolvedPath: string | null = selectedAssetId.includes("/")
+          ? selectedAssetId // looks like a path already
           : null;
         let resolvedAsset: AssetSummary | null = null;
 
@@ -151,10 +151,10 @@ export function SkillDetailView(): React.JSX.Element {
         if (!resolvedPath) {
           const baseUrl = getSidecarBaseUrl();
           if (baseUrl) {
-            const res = await fetch(`${baseUrl}/assets?kind=skill&scope=global`);
+            const res = await fetch(`${baseUrl}/assets?kind=${kind}&scope=global`);
             if (res.ok) {
               const data = (await res.json()) as { assets: AssetSummary[] };
-              const found = data.assets.find((a) => a.id === selectedSkillId);
+              const found = data.assets.find((a) => a.id === selectedAssetId);
               if (found) {
                 resolvedAsset = found;
                 resolvedPath = found.sourcePath;
@@ -171,12 +171,12 @@ export function SkillDetailView(): React.JSX.Element {
 
         const bytes = await invoke<number[]>("fs_read_file", {
           path: resolvedPath,
-          caller: "SkillDetailView",
+          caller: "AssetDetailView",
         });
 
         const text = new TextDecoder().decode(new Uint8Array(bytes));
 
-        const parseResult = parseSkillContent(text);
+        const parseResult = parseAssetContent(text);
         if (!parseResult) {
           setParseError("Could not parse front-matter delimiters.");
           setLoadState("error-parse");
@@ -185,9 +185,9 @@ export function SkillDetailView(): React.JSX.Element {
 
         // Merge front_matter_json from sidecar (richer parse) if available
         if (resolvedAsset?.frontMatter) {
-          const mergedFm: SkillFrontMatter = {
+          const mergedFm: AssetFrontMatter = {
             ...parseResult.frontMatter,
-            ...(resolvedAsset.frontMatter as SkillFrontMatter),
+            ...(resolvedAsset.frontMatter as AssetFrontMatter),
           };
           setParsed({ frontMatter: mergedFm, body: parseResult.body });
         } else {
@@ -209,11 +209,15 @@ export function SkillDetailView(): React.JSX.Element {
         }
       }
     })();
-  }, [selectedSkillId]);
+  }, [selectedAssetId, kind]);
+
+  // ── Kind-specific display labels ───────────────────────────────────────────
+  const kindLabel = kind === "agent" ? "Agent" : kind === "command" ? "Command" : "Skill";
+  const kindPluralLabel = kind === "agent" ? "Agents" : kind === "command" ? "Commands" : "Skills";
 
   // ── Render: loading ────────────────────────────────────────────────────────
   if (loadState === "loading") {
-    return <SkillDetailLoadingSkeleton />;
+    return <AssetDetailLoadingSkeleton />;
   }
 
   // ── Render: error — file not found ─────────────────────────────────────────
@@ -237,13 +241,13 @@ export function SkillDetailView(): React.JSX.Element {
           style={{ color: "var(--color-foreground-muted)" }}
         />
         <p style={{ fontSize: "var(--text-lg)", fontWeight: "var(--weight-semibold)" }}>
-          Skill file not found
+          {kindLabel} file not found
         </p>
         <p style={{ fontSize: "var(--text-sm)", color: "var(--color-foreground-muted)" }}>
-          Couldn&apos;t read the skill file. It may have been moved or deleted.
+          Couldn&apos;t read the {kindLabel.toLowerCase()} file. It may have been moved or deleted.
         </p>
         <Button variant="secondary" size="sm" onClick={back}>
-          Back to Skills
+          Back to {kindPluralLabel}
         </Button>
       </div>
     );
@@ -270,7 +274,7 @@ export function SkillDetailView(): React.JSX.Element {
           style={{ color: "var(--color-warning)" }}
         />
         <p style={{ fontSize: "var(--text-lg)", fontWeight: "var(--weight-semibold)" }}>
-          Couldn&apos;t parse skill front-matter
+          Couldn&apos;t parse {kindLabel.toLowerCase()} front-matter
         </p>
         {parseError && (
           <p
@@ -296,7 +300,8 @@ export function SkillDetailView(): React.JSX.Element {
   }
 
   // ── Render: populated ──────────────────────────────────────────────────────
-  const skillName = parsed?.frontMatter?.name ?? asset?.name ?? "Untitled skill";
+  const assetName =
+    parsed?.frontMatter?.name ?? asset?.name ?? `Untitled ${kindLabel.toLowerCase()}`;
 
   return (
     <TooltipProvider>
@@ -344,14 +349,14 @@ export function SkillDetailView(): React.JSX.Element {
             variant="ghost"
             size="sm"
             onClick={back}
-            aria-label="Back to Skills"
+            aria-label={`Back to ${kindPluralLabel}`}
             style={{ gap: "var(--space-1)" }}
           >
             <Icon name="chevron-left" size="sm" aria-hidden />
-            Skills
+            {kindPluralLabel}
           </Button>
 
-          {/* Skill name heading */}
+          {/* Asset name heading */}
           <h1
             id={DETAIL_HEADING_ID}
             style={{
@@ -365,7 +370,7 @@ export function SkillDetailView(): React.JSX.Element {
               whiteSpace: "nowrap",
             }}
           >
-            {skillName}
+            {assetName}
           </h1>
 
           {/* Reveal in Finder — disabled, "Coming soon" (operator deviation #3) */}
@@ -447,7 +452,7 @@ export function SkillDetailView(): React.JSX.Element {
                     fontStyle: "italic",
                   }}
                 >
-                  This skill has no body content.
+                  This {kindLabel.toLowerCase()} has no body content.
                 </p>
               ) : (
                 <div
@@ -456,7 +461,7 @@ export function SkillDetailView(): React.JSX.Element {
                     color: "var(--color-foreground)",
                     lineHeight: "var(--leading-relaxed)",
                   }}
-                  className="skill-markdown-body"
+                  className="asset-markdown-body"
                 >
                   <ReactMarkdown>{parsed.body}</ReactMarkdown>
                 </div>

@@ -1,21 +1,21 @@
 /**
- * SkillDetailView — loading skeleton (2-boundary per loading-architecture.md §skills.detail)
+ * AssetDetailView — loading skeleton (2-boundary per loading-architecture.md §skills.detail)
  *
  * Boundary 1: Front-matter form skeleton (5 rows)
  * Boundary 2: Body content skeleton (8 lines)
  *
- * Story: 6.4
+ * Story: 6.16 — renamed from SkillDetailLoadingSkeleton (generic, no behavioral change)
  */
 
 import { Skeleton } from "@/components/ui/Skeleton/Skeleton";
 
-export function SkillDetailLoadingSkeleton() {
+export function AssetDetailLoadingSkeleton() {
   return (
     <div
       role="status"
       aria-live="polite"
       aria-busy="true"
-      aria-label="Loading skill…"
+      aria-label="Loading asset…"
       style={{
         display: "flex",
         flexDirection: "column",

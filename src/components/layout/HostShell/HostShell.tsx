@@ -46,9 +46,9 @@ import { useProject } from "@/hooks/useProject";
 import { useActiveNav } from "@/stores/active-nav";
 import { AgentLibraryView } from "@/views/agent-library/AgentLibraryView";
 import { SkillLibraryView } from "@/views/skill-library/SkillLibraryView";
-import { SkillDetailView } from "@/views/skill-detail/SkillDetailView";
-import { SkillEditorView } from "@/views/skill-editor/SkillEditorView";
-import { useSkillNav } from "@/stores/skill-nav";
+import { AssetDetailView } from "@/views/asset-detail/AssetDetailView";
+import { AssetEditorView } from "@/views/asset-editor/AssetEditorView";
+import { useAssetNav } from "@/stores/asset-nav";
 
 // ─── Types ─────────────────────────────────────────────────────────────────────
 
@@ -77,8 +77,8 @@ export interface HostShellProps {
 export function HostShell({ children, className }: HostShellProps): React.ReactElement {
   const project = useProject();
   const { activeItemId, setActiveItem } = useActiveNav();
-  // Story 6.4: skill sub-navigation — must be called at top level (Rules of Hooks)
-  const { mode: skillMode } = useSkillNav();
+  // Story 6.16: asset sub-navigation — must be called at top level (Rules of Hooks)
+  const { kind: assetKind, mode: assetMode } = useAssetNav();
 
   // ── Content area: what goes inside PrimaryWorkArea ──────────────────────────
 
@@ -91,14 +91,16 @@ export function HostShell({ children, className }: HostShellProps): React.ReactE
     // (~/.claude/agents, ~/.claude/skills) — they do NOT require a project
     // to be open. Route them BEFORE the project-null gate.
     if (activeItemId === "agents") {
+      // Story 6.16: kind-aware dispatch — agent sub-navigation mirrors skill flow.
+      if (assetKind === "agent" && assetMode === "editor") return <AssetEditorView />;
+      if (assetKind === "agent" && assetMode === "detail") return <AssetDetailView />;
       return <AgentLibraryView />;
     }
 
     if (activeItemId === "skills") {
-      // Story 6.4: sub-navigation within the Skills section.
-      // mode transitions: library → detail → editor
-      if (skillMode === "editor") return <SkillEditorView />;
-      if (skillMode === "detail") return <SkillDetailView />;
+      // Story 6.16: kind-aware dispatch — sub-navigation within the Skills section.
+      if (assetKind === "skill" && assetMode === "editor") return <AssetEditorView />;
+      if (assetKind === "skill" && assetMode === "detail") return <AssetDetailView />;
       return <SkillLibraryView />;
     }
 
@@ -154,7 +156,7 @@ export function HostShell({ children, className }: HostShellProps): React.ReactE
         Project open — Epic 03 wires route rendering here.
       </div>
     );
-  }, [children, project, activeItemId, skillMode]);
+  }, [children, project, activeItemId, assetKind, assetMode]);
 
   // ── Layout ────────────────────────────────────────────────────────────────────
 

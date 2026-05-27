@@ -1,5 +1,5 @@
 /**
- * SkillEditorView — edit mode for a single skill file.
+ * AssetEditorView — edit mode for a single skill or agent file.
  *
  * Layout:
  *   Header (sticky): ← Back | <h1>name</h1> | ● Modified | [Cancel] [Save]
@@ -9,16 +9,18 @@
  * Save flow (AC3):
  *   1. Run FrontMatterForm validation
  *   2. If invalid → block save, show summary alert, focus first invalid field
- *   3. If valid → invoke write_skill_file, on success → setMode("detail")
+ *   3. If valid → invoke write_asset_file(kind, path, content), on success → setMode("detail")
  *
  * Cancel flow: dirty check → alertdialog confirmation modal if dirty
+ *
+ * Dirty state: tracked per-kind per-path via asset-nav.dirtyByKey (AC4)
  *
  * Deviations from ux-spec §7.6 (operator-approved):
  *   1. Layout: stacked single-column (NOT two-pane)
  *   2. Save button always enabled (NOT disabled-when-invalid) for a11y
  *   3. Known limitation (Story 6.5): sidebar-switch-while-dirty guard deferred
  *
- * Story: 6.4 — Skill Detail + Skill Editor (FR-004, FR-005)
+ * Story: 6.16 — Asset Detail+Editor Kind-Parameterized Refactor (FR-004, FR-005)
  */
 
 import * as React from "react";
@@ -39,11 +41,12 @@ import {
   validateFrontMatter,
 } from "@/components/ui/FrontMatterForm/FrontMatterForm";
 import type {
-  SkillFrontMatter,
+  AssetFrontMatter,
   FrontMatterErrors,
 } from "@/components/ui/FrontMatterForm/FrontMatterForm";
-import { useSkillNav } from "@/stores/skill-nav";
+import { useAssetNav } from "@/stores/asset-nav";
 import { getSidecarBaseUrl } from "@/lib/sidecar-client";
+import { toast } from "@/components/ui/Toast/Toast";
 import type { AssetSummary } from "@zoeplane/shared-types";
 
 // ---------------------------------------------------------------------------
@@ -73,7 +76,7 @@ import { FallbackBodyEditor } from "@/components/editor/FallbackBodyEditor";
  * The sidecar's gray-matter-based serializer is authoritative; this is used
  * only to produce content for the Tauri write command.
  */
-function serializeFrontMatter(fm: SkillFrontMatter): string {
+function serializeFrontMatter(fm: AssetFrontMatter): string {
   const lines: string[] = [];
   for (const [key, value] of Object.entries(fm)) {
     if (value === undefined || value === null || value === "") continue;
@@ -105,7 +108,7 @@ function serializeFrontMatter(fm: SkillFrontMatter): string {
   return `---\n${lines.join("\n")}\n---\n`;
 }
 
-function buildFileContent(fm: SkillFrontMatter, body: string): string {
+function buildFileContent(fm: AssetFrontMatter, body: string): string {
   // CRLF → LF normalize at entry (feedback_text_content_crlf_normalize.md)
   const normalizedBody = body.replace(/\r\n/g, "\n").replace(/\n+$/, "");
   return serializeFrontMatter(fm) + normalizedBody + "\n";
@@ -214,16 +217,16 @@ function StatusChip({ status }: { status: EditorStatus }) {
 }
 
 // ---------------------------------------------------------------------------
-// SkillEditorView
+// AssetEditorView
 // ---------------------------------------------------------------------------
 
-const EDITOR_HEADING_ID = "skill-editor-heading";
+const EDITOR_HEADING_ID = "asset-editor-heading";
 
-export function SkillEditorView(): React.JSX.Element {
-  const { selectedSkillId, back, setMode } = useSkillNav();
+export function AssetEditorView(): React.JSX.Element {
+  const { kind, selectedAssetId, back, setMode, setDirty, clearDirty } = useAssetNav();
 
   // ── State ──────────────────────────────────────────────────────────────────
-  const [frontMatter, setFrontMatter] = React.useState<SkillFrontMatter>({});
+  const [frontMatter, setFrontMatter] = React.useState<AssetFrontMatter>({});
   const [body, setBody] = React.useState<string>("");
   const [originalContent, setOriginalContent] = React.useState<string>("");
   const [sourcePath, setSourcePath] = React.useState<string | null>(null);
@@ -263,6 +266,16 @@ export function SkillEditorView(): React.JSX.Element {
     [frontMatter, body, originalContent],
   );
 
+  // Sync dirty state into asset-nav store (per-kind per-path isolation, AC4)
+  React.useEffect(() => {
+    if (!sourcePath) return;
+    const key = `${kind}:${sourcePath}` as const;
+    setDirty(key, dirty);
+    return () => {
+      clearDirty(key);
+    };
+  }, [dirty, kind, sourcePath, setDirty, clearDirty]);
+
   // Update status chip based on dirty state
   React.useEffect(() => {
     if (status === "saving" || status === "saved") return;
@@ -294,11 +307,11 @@ export function SkillEditorView(): React.JSX.Element {
     };
   }, [frontMatter, body, sourcePath]);
 
-  // ── Load skill file ────────────────────────────────────────────────────────
+  // ── Load asset file ────────────────────────────────────────────────────────
   React.useEffect(() => {
-    if (!selectedSkillId) {
+    if (!selectedAssetId) {
       setLoadState("error");
-      setLoadError("No skill selected.");
+      setLoadError(`No ${kind} selected.`);
       return;
     }
 
@@ -307,15 +320,15 @@ export function SkillEditorView(): React.JSX.Element {
     void (async () => {
       try {
         // Resolve source path
-        let resolvedPath: string | null = selectedSkillId.includes("/") ? selectedSkillId : null;
+        let resolvedPath: string | null = selectedAssetId.includes("/") ? selectedAssetId : null;
 
         if (!resolvedPath) {
           const baseUrl = getSidecarBaseUrl();
           if (baseUrl) {
-            const res = await fetch(`${baseUrl}/assets?kind=skill&scope=global`);
+            const res = await fetch(`${baseUrl}/assets?kind=${kind}&scope=global`);
             if (res.ok) {
               const data = (await res.json()) as { assets: AssetSummary[] };
-              const found = data.assets.find((a) => a.id === selectedSkillId);
+              const found = data.assets.find((a) => a.id === selectedAssetId);
               if (found) resolvedPath = found.sourcePath;
             }
           }
@@ -323,7 +336,9 @@ export function SkillEditorView(): React.JSX.Element {
 
         if (!resolvedPath) {
           setLoadState("error");
-          setLoadError("Skill file path could not be resolved.");
+          setLoadError(
+            `${kind.charAt(0).toUpperCase() + kind.slice(1)} file path could not be resolved.`,
+          );
           return;
         }
 
@@ -331,7 +346,7 @@ export function SkillEditorView(): React.JSX.Element {
 
         const bytes = await invoke<number[]>("fs_read_file", {
           path: resolvedPath,
-          caller: "SkillEditorView",
+          caller: "AssetEditorView",
         });
 
         const text = new TextDecoder().decode(new Uint8Array(bytes));
@@ -346,7 +361,7 @@ export function SkillEditorView(): React.JSX.Element {
         const bodyText = match?.[2] ?? normalized;
 
         // Parse front-matter (simple line-by-line for known fields + preserve unknown)
-        const fm: SkillFrontMatter = {};
+        const fm: AssetFrontMatter = {};
         const lines = yamlBlock.split("\n");
         let i = 0;
         while (i < lines.length) {
@@ -388,7 +403,7 @@ export function SkillEditorView(): React.JSX.Element {
         setLoadError(msg);
       }
     })();
-  }, [selectedSkillId]);
+  }, [selectedAssetId, kind]);
 
   // ── Save ───────────────────────────────────────────────────────────────────
   async function handleSave() {
@@ -417,13 +432,24 @@ export function SkillEditorView(): React.JSX.Element {
 
     try {
       type CommandResponse = { ok: boolean; code?: string; message?: string };
-      const result = await invoke<CommandResponse>("write_skill_file", {
+      const result = await invoke<CommandResponse>("write_asset_file", {
+        kind,
         path: sourcePath,
         content,
       });
 
       if (!result.ok) {
-        throw new Error(result.message ?? result.code ?? "write_skill_file returned ok: false");
+        if (result.code === "scope_denied") {
+          // AC6: path-lock violations surface as non-blocking Toast; editor
+          // stays in idle with in-memory edits intact.
+          const msg = result.message ?? "Save blocked: this path is outside the allowed FS scope.";
+          toast.error("Path-lock violation", { description: msg });
+          setStatus("idle");
+          return;
+        }
+        // All other failures (internal_error, etc.) → inline banner
+        const msg = result.message ?? result.code ?? "write_asset_file returned ok: false";
+        throw new Error(msg);
       }
 
       setOriginalContent(content);
@@ -460,6 +486,9 @@ export function SkillEditorView(): React.JSX.Element {
     }
   }, [showSummaryAlert, validationErrors]);
 
+  // ── Kind-specific display labels ───────────────────────────────────────────
+  const kindLabel = kind === "agent" ? "Agent" : kind === "command" ? "Command" : "Skill";
+
   // ── Back / Cancel ──────────────────────────────────────────────────────────
   function handleBack() {
     if (dirty) {
@@ -482,7 +511,7 @@ export function SkillEditorView(): React.JSX.Element {
           color: "var(--color-foreground-muted)",
         }}
       >
-        <Spinner size="sm" aria-label="Loading skill…" />
+        <Spinner size="sm" aria-label={`Loading ${kindLabel.toLowerCase()}…`} />
         <span style={{ fontSize: "var(--text-sm)" }}>Loading…</span>
       </div>
     );
@@ -508,7 +537,7 @@ export function SkillEditorView(): React.JSX.Element {
           style={{ color: "var(--color-warning)" }}
         />
         <p style={{ fontSize: "var(--text-lg)", fontWeight: "var(--weight-semibold)" }}>
-          Couldn&apos;t load skill
+          Couldn&apos;t load {kindLabel.toLowerCase()}
         </p>
         {loadError && (
           <p style={{ fontSize: "var(--text-sm)", color: "var(--color-foreground-muted)" }}>
@@ -516,13 +545,14 @@ export function SkillEditorView(): React.JSX.Element {
           </p>
         )}
         <Button variant="secondary" size="sm" onClick={back}>
-          Back to Skills
+          Back
         </Button>
       </div>
     );
   }
 
-  const skillName = (frontMatter.name as string | undefined) ?? "Untitled skill";
+  const assetName =
+    (frontMatter.name as string | undefined) ?? `Untitled ${kindLabel.toLowerCase()}`;
 
   return (
     <>
@@ -567,7 +597,7 @@ export function SkillEditorView(): React.JSX.Element {
               whiteSpace: "nowrap",
             }}
           >
-            {skillName}
+            {assetName}
           </h1>
 
           {/* Status chip */}
@@ -667,7 +697,7 @@ export function SkillEditorView(): React.JSX.Element {
                   void handleSave();
                 }}
                 readOnly={status === "saving"}
-                ariaLabel="Skill markdown body"
+                ariaLabel={`${kindLabel} markdown body`}
               />
             }
           >
@@ -699,7 +729,7 @@ export function SkillEditorView(): React.JSX.Element {
                   void handleSave();
                 }}
                 readOnly={status === "saving"}
-                ariaLabel="Skill markdown body"
+                ariaLabel={`${kindLabel} markdown body`}
               />
             </React.Suspense>
           </CodeMirrorErrorBoundary>
@@ -717,7 +747,7 @@ export function SkillEditorView(): React.JSX.Element {
           <ModalHeader>
             <ModalTitle>Discard unsaved changes?</ModalTitle>
             <ModalDescription>
-              Your edits to <strong>{skillName}</strong> will be lost.
+              Your edits to <strong>{assetName}</strong> will be lost.
             </ModalDescription>
           </ModalHeader>
           <ModalFooter>
