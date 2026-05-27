@@ -251,8 +251,11 @@ pub fn run() {
             // Story 3.9: Asset reveal + editor open (FR-034 / FR-035).
             commands::assets::reveal_in_finder,
             commands::assets::open_in_editor,
-            // Story 6.4: Skill file write (FR-004).
+            // Story 6.4: Skill file write (FR-004) — DEPRECATED; use write_asset_file.
+            #[allow(deprecated)]
             commands::skills::write_skill_file,
+            // Story 6.16: Kind-parameterized asset file write (FR-004).
+            commands::asset_files::write_asset_file,
         ])
         .setup(|app| {
             info!("App setup — spawning sidecar");
@@ -351,6 +354,47 @@ pub fn run() {
                     e
                 },
             )?;
+
+            // Story 6.16 (ADR-003 §3.5): per-kind directory canonicalize-on-registration.
+            // Register the canonical realpath of each per-kind directory individually
+            // so that write_asset_file's is_allowed_for_probe check succeeds even when
+            // a per-kind directory is itself a symlink (PAI topology). If a directory
+            // does not yet exist at startup, skip registration — the parent
+            // ~/.claude/** scope + is_allowed_for_probe ancestor walk handles it;
+            // the directory is created on first write (AC #7 in write_asset_file).
+            let per_kind_dirs = [
+                home_dir.join(".claude").join("skills"),
+                home_dir.join(".claude").join("agents"),
+                home_dir.join(".claude").join("commands"),
+            ];
+            for kind_dir in &per_kind_dirs {
+                if kind_dir.exists() {
+                    let kind_paths = [kind_dir.clone()];
+                    if let Err(e) = init_fs_scope(&app.fs_scope(), &kind_paths) {
+                        warn!(
+                            target: "fs-scope-init",
+                            dir = %kind_dir.display(),
+                            error = %e,
+                            "Per-kind dir scope registration failed — parent scope covers it"
+                        );
+                    }
+                    register_symlinked_children(&app.fs_scope(), kind_dir).map_err(|e| {
+                        error!(
+                            target: "fs-scope-init",
+                            dir = %kind_dir.display(),
+                            error = %e,
+                            "Per-kind symlink-walk failed — aborting app setup"
+                        );
+                        e
+                    })?;
+                } else {
+                    info!(
+                        target: "fs-scope-init",
+                        dir = %kind_dir.display(),
+                        "Per-kind directory does not exist at startup — skipping scope registration"
+                    );
+                }
+            }
 
             info!(
                 target: "fs-scope-init",

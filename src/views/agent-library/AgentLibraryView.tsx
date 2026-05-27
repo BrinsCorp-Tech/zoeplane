@@ -25,6 +25,7 @@ import { getSidecarBaseUrl, subscribeSidecarPort } from "@/lib/sidecar-client";
 import { AgentLibraryEmptyState } from "./empty-state";
 import { AgentLibraryErrorState } from "./error-state";
 import { useLibrarySSE } from "@/hooks/useLibrarySSE";
+import { useAssetNav } from "@/stores/asset-nav";
 
 // ---------------------------------------------------------------------------
 // AgentLibraryView
@@ -77,10 +78,8 @@ export function AgentLibraryView(): React.JSX.Element {
           key={asset.id}
           asset={asset}
           onActivate={(a) => {
-            // TODO: Story 6.6 — navigate to Agent Detail view
-            if (import.meta.env.DEV) {
-              console.log("[AgentLibraryView] agent activated:", a.id);
-            }
+            // Story 6.16: navigate to Asset Detail view with kind=agent
+            useAssetNav.getState().open("agent", a.id);
           }}
         />
       )}

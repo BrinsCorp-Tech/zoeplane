@@ -21,7 +21,7 @@
 import { cleanup, render, screen, fireEvent } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { FrontMatterForm, validateFrontMatter } from "../FrontMatterForm";
-import type { SkillFrontMatter } from "../FrontMatterForm";
+import type { AssetFrontMatter } from "../FrontMatterForm";
 
 afterEach(() => {
   cleanup();
@@ -189,7 +189,7 @@ describe("FrontMatterForm edit mode", () => {
 
   it("preserves unknown fields through onChange (CRITICAL invariant)", () => {
     const onChange = vi.fn();
-    const initialValue: SkillFrontMatter = {
+    const initialValue: AssetFrontMatter = {
       name: "code-reviewer",
       description: "old description",
       tools: ["Bash", "Read"], // unknown field — must be preserved

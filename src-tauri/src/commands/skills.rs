@@ -56,6 +56,12 @@ pub(crate) fn canonicalize_for_probe(path: &std::path::Path) -> PathBuf {
 
 /// Write `content` to the skill file at `path`.
 ///
+/// # Deprecation
+///
+/// **DEPRECATED** as of Story 6.16. Use `write_asset_file(kind="skill", ...)` in
+/// `asset_files.rs` instead. This function is retained for one commit while all
+/// call sites are confirmed removed, then deleted.
+///
 /// Enforcements:
 ///   - POSIX-normalize path at entry
 ///   - CRLF → LF normalize content at entry
@@ -68,6 +74,10 @@ pub(crate) fn canonicalize_for_probe(path: &std::path::Path) -> PathBuf {
 /// Returns `Ok(CommandResponse)` always — all errors are encoded as
 /// `CommandResponse::err(...)` to avoid unhandled promise rejections on the
 /// JS side (AC #7 pattern, consistent with editor.rs / assets.rs).
+#[deprecated(
+    since = "0.0.0",
+    note = "Use write_asset_file (asset_files.rs) instead"
+)]
 #[command]
 pub async fn write_skill_file(
     app: tauri::AppHandle,

@@ -1,11 +1,11 @@
 /**
- * FrontMatterForm — structured editor for skill front-matter fields.
+ * FrontMatterForm — structured editor for asset front-matter fields.
  *
  * Two modes:
  *   - read: renders a semantic <dl> list of fields (read-only)
  *   - edit: renders labeled form fields with inline per-field validation
  *
- * Field schema (skills v1 per ux-spec §7.6 Section 1):
+ * Field schema (assets v1 per ux-spec §7.6 Section 1):
  *   name         — required; letters/digits/hyphens; ≤64 chars
  *   description  — recommended; free-form (Claude Code uses this as a
  *                  semantic-discovery surface; auto-loaded skills like
@@ -21,7 +21,7 @@
  * Critical invariant: unknown fields (e.g. `tools: [Bash, Read]`) MUST be
  * preserved through any edit/save cycle without modification.
  *
- * Story: 6.4 — Skill Detail + Skill Editor (FR-003, FR-004, FR-005)
+ * Story: 6.16 (type rename) — Asset Detail+Editor Kind-Parameterized Refactor (FR-003, FR-004, FR-005)
  */
 
 import * as React from "react";
@@ -40,7 +40,7 @@ import { cn } from "@/lib/utils";
 // ---------------------------------------------------------------------------
 
 /** Known fields that this form renders as interactive controls. */
-export interface SkillFrontMatter {
+export interface AssetFrontMatter {
   name?: string;
   description?: string;
   version?: string;
@@ -64,9 +64,9 @@ export interface FrontMatterErrors {
 
 export interface FrontMatterFormProps {
   /** Current front-matter values. Unknown fields are preserved. */
-  value: SkillFrontMatter;
+  value: AssetFrontMatter;
   /** Controlled mode: called on every field change in edit mode. */
-  onChange?: (updated: SkillFrontMatter) => void;
+  onChange?: (updated: AssetFrontMatter) => void;
   /** "read" renders a semantic <dl>; "edit" renders form inputs. */
   mode: "read" | "edit";
   /** Per-field validation errors for edit mode. */
@@ -112,7 +112,7 @@ const HEX_COLOR_RE = /^#[0-9a-fA-F]{6}$/;
  * Validate all known fields and return a map of error messages.
  * Returns an empty object when all fields are valid.
  */
-export function validateFrontMatter(data: SkillFrontMatter): FrontMatterErrors {
+export function validateFrontMatter(data: AssetFrontMatter): FrontMatterErrors {
   const errors: FrontMatterErrors = {};
 
   // name — required
@@ -260,7 +260,7 @@ function EditField({
 // ---------------------------------------------------------------------------
 
 /**
- * FrontMatterForm — renders skill front-matter as a labeled form or read list.
+ * FrontMatterForm — renders asset front-matter as a labeled form or read list.
  *
  * Unknown fields (outside the known schema) are always preserved:
  *   - Read mode: displayed as read-only monospace key/value rows
@@ -283,7 +283,8 @@ export function FrontMatterForm({
 
   function handleChange(field: keyof FrontMatterErrors, val: string) {
     if (onChange) {
-      onChange({ ...value, [field]: val });
+      const updated: AssetFrontMatter = { ...value, [field]: val };
+      onChange(updated);
     }
   }
 
