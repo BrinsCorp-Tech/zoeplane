@@ -228,7 +228,8 @@ describe("HostShell — structural accessibility (Story 2.8 AC #9)", () => {
 
     it("renders Epic 03 placeholder when activeItemId is an unmapped value", () => {
       useAppStore.getState()._setProjectRoot("/Users/example/project");
-      useActiveNav.setState({ activeItemId: "commands" });
+      // "settings" is an unmapped nav item (not commands/agents/skills)
+      useActiveNav.setState({ activeItemId: "settings" });
       render(<HostShell />);
       expect(screen.getByText(/Epic 03 wires route rendering/)).toBeDefined();
     });
@@ -273,12 +274,20 @@ describe("HostShell — structural accessibility (Story 2.8 AC #9)", () => {
       expect(screen.getByRole("region", { name: "Skills library" })).toBeDefined();
     });
 
+    it("renders CommandsLibraryView when activeItemId is 'commands' (Story 6.6)", () => {
+      useActiveNav.setState({ activeItemId: "commands" });
+      renderWithQuery(<HostShell />);
+      // CommandsLibraryView renders via LibraryShell <section aria-label="Commands library">
+      expect(screen.getByRole("region", { name: "Commands library" })).toBeDefined();
+    });
+
     it("renders placeholder when activeItemId is null with project open", () => {
       useAppStore.getState()._setProjectRoot("/Users/example/project");
       // activeItemId remains null from beforeEach
       render(<HostShell />);
       expect(screen.queryByRole("region", { name: "Agents library" })).toBeNull();
       expect(screen.queryByRole("region", { name: "Skills library" })).toBeNull();
+      expect(screen.queryByRole("region", { name: "Commands library" })).toBeNull();
       expect(screen.getByText(/Epic 03 wires route rendering/)).toBeDefined();
     });
   });

@@ -46,6 +46,7 @@ import { useProject } from "@/hooks/useProject";
 import { useActiveNav } from "@/stores/active-nav";
 import { AgentLibraryView } from "@/views/agent-library/AgentLibraryView";
 import { SkillLibraryView } from "@/views/skill-library/SkillLibraryView";
+import { CommandsLibraryView } from "@/views/commands-library/CommandsLibraryView";
 import { AssetDetailView } from "@/views/asset-detail/AssetDetailView";
 import { AssetEditorView } from "@/views/asset-editor/AssetEditorView";
 import { useAssetNav } from "@/stores/asset-nav";
@@ -102,6 +103,13 @@ export function HostShell({ children, className }: HostShellProps): React.ReactE
       if (assetKind === "skill" && assetMode === "editor") return <AssetEditorView />;
       if (assetKind === "skill" && assetMode === "detail") return <AssetDetailView />;
       return <SkillLibraryView />;
+    }
+
+    if (activeItemId === "commands") {
+      // Story 6.6: Commands Library — read-only in this story; editing is Story 6.18.
+      // Command detail reuses AssetDetailView with kind="command" (set by open()).
+      if (assetKind === "command" && assetMode === "detail") return <AssetDetailView />;
+      return <CommandsLibraryView />;
     }
 
     if (project === null) {
