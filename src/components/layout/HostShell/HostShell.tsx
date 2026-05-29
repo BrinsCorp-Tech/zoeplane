@@ -106,7 +106,8 @@ export function HostShell({ children, className }: HostShellProps): React.ReactE
     }
 
     if (activeItemId === "commands") {
-      // Story 6.6: Commands Library — read-only in this story; editing is Story 6.18.
+      // Story 6.18: command editor route wired — mirrors skill/agent dispatch pattern.
+      if (assetKind === "command" && assetMode === "editor") return <AssetEditorView />;
       // Command detail reuses AssetDetailView with kind="command" (set by open()).
       if (assetKind === "command" && assetMode === "detail") return <AssetDetailView />;
       return <CommandsLibraryView />;

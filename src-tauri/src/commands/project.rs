@@ -333,8 +333,43 @@ pub async fn switch_project(
 
     // ------------------------------------------------------------------
     // Step 5: Extend runtime FS scope for <projectRoot>/.claude/** (FB-015 / AC #1c)
+    //
+    // CRITICAL: canonicalize claude_dir before allow_directory to prevent the
+    // verbatim-vs-canonical asymmetry fixed for init_fs_scope in PR #41.
+    // write_asset_file's step-6 scope check (is_allowed_for_probe) canonicalizes
+    // the candidate path before matching. If allow_directory stores a verbatim
+    // logical path but the candidate canonicalizes through a symlink to a
+    // different realpath, the scope check wrongly DENIES a valid write and
+    // surfaces as a confusing "Path-lock violation" toast.
+    // Mirrors init_fs_scope's pattern exactly:
+    //   canonical = canonicalize(path).unwrap_or(path)
+    // The create_dir_all call below ensures claude_dir exists before
+    // canonicalize runs so the fallback-to-logical-path branch is not reached
+    // in normal flow. (feedback_tauri_scope_canonicalize_asymmetry.md / ADR-003 §3.5)
     // ------------------------------------------------------------------
     let claude_dir = PathBuf::from(&project_root).join(".claude");
+
+    // Ensure claude_dir exists before canonicalize so we get a stable realpath.
+    // If creation fails (e.g., parent doesn't exist yet), proceed with the
+    // logical path — the scope extension may be partially effective, and
+    // the user will see a write failure rather than a silent deny.
+    if !claude_dir.exists() {
+        if let Err(e) = std::fs::create_dir_all(&claude_dir) {
+            warn!(
+                target: "project-switch",
+                project_id = %project_id_posix,
+                claude_dir = %claude_dir.display(),
+                error = %e,
+                "switch_project: could not pre-create .claude/ for canonicalization — proceeding with logical path"
+            );
+        }
+    }
+
+    // Canonicalize-on-registration: resolve the physical path so the registered
+    // glob pattern matches what Scope::is_allowed will query after canonicalization.
+    // Falls back to the logical path if the directory still doesn't exist.
+    let claude_dir_canonical =
+        std::fs::canonicalize(&claude_dir).unwrap_or_else(|_| claude_dir.clone());
 
     // Pre-extension probe: check the path against the existing scope (or its
     // ancestor) using the is_allowed_for_probe helper from fs.rs, to validate
@@ -343,16 +378,16 @@ pub async fn switch_project(
     // We do NOT block the extension if the probe fails — the probe checks if
     // it's already in scope, but FB-015 is specifically about EXTENDING the scope
     // for NEW project paths. We proceed with the extension but log the pre-state.
-    let pre_allowed = super::fs::is_allowed_for_probe(&scope, &claude_dir);
+    let pre_allowed = super::fs::is_allowed_for_probe(&scope, &claude_dir_canonical);
     info!(
         target: "project-switch",
         project_id = %project_id_posix,
-        claude_dir = %claude_dir.display(),
+        claude_dir = %claude_dir_canonical.display(),
         pre_allowed,
-        "switch_project: extending FS scope for project claude dir"
+        "switch_project: extending FS scope for project claude dir (canonicalized)"
     );
 
-    match scope.allow_directory(&claude_dir, true) {
+    match scope.allow_directory(&claude_dir_canonical, true) {
         Ok(()) => {
             info!(
                 target: "project-switch",
@@ -368,7 +403,7 @@ pub async fn switch_project(
             error!(
                 target: "project-switch",
                 project_id = %project_id_posix,
-                claude_dir = %claude_dir.display(),
+                claude_dir = %claude_dir_canonical.display(),
                 error = %e,
                 "switch_project: FS scope extension failed — aborting switch"
             );
@@ -388,12 +423,12 @@ pub async fn switch_project(
     // ------------------------------------------------------------------
     // Step 6: Check whether .claude/ exists; handle missing case (AC #7)
     // ------------------------------------------------------------------
-    let claude_exists = claude_dir.exists();
+    let claude_exists = claude_dir_canonical.exists();
     if !claude_exists {
         warn!(
             target: "project-switch",
             project_id = %project_id_posix,
-            claude_dir = %claude_dir.display(),
+            claude_dir = %claude_dir_canonical.display(),
             "switch_project: .claude/ directory missing — emitting ProjectClaudeMissingWarning, completing with empty rescan"
         );
         app.emit(
@@ -946,5 +981,102 @@ mod tests {
     fn posix_normalisation_is_idempotent() {
         let path = "/home/user/.claude/projects";
         assert_eq!(to_posix(&to_posix(path)), to_posix(path));
+    }
+
+    // ── CRITICAL-2 regression: canonicalize-on-registration for symlinked project ──
+    //
+    // Verifies that the canonicalize-before-allow_directory pattern used in
+    // switch_project step 5 produces a scope entry whose pattern matches the
+    // canonical realpath of a file inside the .claude/ directory — exactly
+    // the asymmetry PR #41 fixed for init_fs_scope.
+    //
+    // Topology: the .claude/ directory IS a symlink to a real directory
+    // (the macOS /var→/private/var case, or a user who symlinks their whole
+    // .claude/ to a cloud-synced location). The fix: canonicalize .claude/
+    // before allow_directory so the registered glob matches what is_allowed
+    // queries (the canonical realpath, not the logical symlink path).
+    //
+    //   real_tmp/dot-claude/        — physical directory
+    //   real_tmp/dot-claude/commands/my-command.md
+    //   project_tmp/logical-claude  → real_tmp/dot-claude  (symlink = logical .claude/)
+    //
+    // Without canonicalize: allow_directory stores logical-claude/** pattern;
+    //   is_allowed(canonical_real_file) queries real_tmp/dot-claude/… → DENY.
+    // With canonicalize: allow_directory stores real_tmp/dot-claude/** pattern;
+    //   is_allowed(canonical_real_file) → ALLOW.
+    //
+    // Gated #[cfg(unix)] because std::os::unix::fs::symlink is Unix-only.
+    #[test]
+    #[cfg(unix)]
+    fn symlinked_project_claude_dir_is_allowed_after_canonicalize_on_registration() {
+        use std::os::unix::fs::symlink;
+        use tauri::utils::config::FsScope;
+
+        let app = tauri::test::mock_app();
+        let scope = tauri::scope::fs::Scope::new(&app, &FsScope::default())
+            .expect("Scope::new must succeed");
+
+        // real_tmp/dot-claude/ — the physical directory that .claude/ will point to.
+        let real_tmp = tempfile::tempdir().expect("create real tmpdir");
+        let real_claude = real_tmp.path().join("dot-claude");
+        let real_commands = real_claude.join("commands");
+        std::fs::create_dir_all(&real_commands).expect("create real commands dir");
+
+        // Write a real command file inside the physical directory.
+        let real_file = real_commands.join("my-command.md");
+        std::fs::write(&real_file, "---\nname: my-command\n---\nBody.\n")
+            .expect("write command file");
+
+        // project_tmp/logical-claude → real_tmp/dot-claude  (symlink).
+        // This simulates a project where .claude/ itself is a symlink.
+        let project_tmp = tempfile::tempdir().expect("create project tmpdir");
+        let logical_claude = project_tmp.path().join("logical-claude");
+        symlink(&real_claude, &logical_claude).expect("create .claude symlink");
+
+        // WITHOUT the fix: register the logical (verbatim) path.
+        {
+            let scope_verbatim = tauri::scope::fs::Scope::new(&app, &FsScope::default())
+                .expect("Scope::new must succeed");
+            scope_verbatim
+                .allow_directory(&logical_claude, true)
+                .expect("allow_directory (verbatim) must succeed");
+            // is_allowed on canonical realpath goes through real_tmp — does NOT
+            // match the verbatim logical_claude/** pattern. This is the PR #41 bug.
+            let canonical_real_file =
+                std::fs::canonicalize(&real_file).expect("canonicalize real_file");
+            let _ = scope_verbatim.is_allowed(&canonical_real_file);
+            // (We don't assert false here — on some systems macOS /private/tmp aliasing
+            // may cause the verbatim path to canonicalize to the same physical location.
+            // The positive assertion on the fix below is the load-bearing check.)
+        }
+
+        // WITH the fix: canonicalize-on-registration matches init_fs_scope.
+        let claude_dir_canonical =
+            std::fs::canonicalize(&logical_claude).unwrap_or_else(|_| logical_claude.clone());
+        scope
+            .allow_directory(&claude_dir_canonical, true)
+            .expect("allow_directory (canonical) must succeed");
+
+        let canonical_real_file =
+            std::fs::canonicalize(&real_file).expect("canonicalize real_file");
+
+        // canonical_real_file goes through real_tmp/dot-claude/commands/,
+        // which IS under claude_dir_canonical (= real_tmp/dot-claude/canonical).
+        assert!(
+            scope.is_allowed(&canonical_real_file),
+            "canonical realpath inside symlinked .claude/ must be allowed after \
+             canonicalize-on-registration. \
+             canonical_real_file={canonical_real_file:?}, \
+             registered_root={claude_dir_canonical:?}"
+        );
+
+        // Negative: a file outside the registered scope must remain denied.
+        let outside_tmp = tempfile::tempdir().expect("create outside tmpdir");
+        let outside_file = outside_tmp.path().join("secret.md");
+        std::fs::write(&outside_file, "sensitive").expect("write outside file");
+        assert!(
+            !scope.is_allowed(&outside_file),
+            "file outside registered scope must remain denied"
+        );
     }
 }
