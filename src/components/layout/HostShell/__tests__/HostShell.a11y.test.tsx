@@ -39,6 +39,7 @@ import { useAppStore } from "@/stores/app";
 import { useNotificationsStore } from "@/stores/notifications";
 import { useCommandPaletteStore } from "@/stores/commandPalette";
 import { useActiveNav } from "@/stores/active-nav";
+import { useAssetNav } from "@/stores/asset-nav";
 
 // ─── Mock Tauri invoke ────────────────────────────────────────────────────────
 //
@@ -118,6 +119,7 @@ afterEach(() => {
   useNotificationsStore.getState().closeCenter();
   useCommandPaletteStore.setState({ actions: [], open: false });
   useActiveNav.setState({ activeItemId: null });
+  useAssetNav.setState({ kind: "skill", selectedAssetId: null, mode: "library", dirtyByKey: {} });
   vi.clearAllMocks();
 });
 
@@ -127,6 +129,7 @@ beforeEach(() => {
   useNotificationsStore.getState().closeCenter();
   useCommandPaletteStore.setState({ actions: [], open: false });
   useActiveNav.setState({ activeItemId: null });
+  useAssetNav.setState({ kind: "skill", selectedAssetId: null, mode: "library", dirtyByKey: {} });
 });
 
 describe("HostShell — structural accessibility (Story 2.8 AC #9)", () => {
@@ -289,6 +292,62 @@ describe("HostShell — structural accessibility (Story 2.8 AC #9)", () => {
       expect(screen.queryByRole("region", { name: "Skills library" })).toBeNull();
       expect(screen.queryByRole("region", { name: "Commands library" })).toBeNull();
       expect(screen.getByText(/Epic 03 wires route rendering/)).toBeDefined();
+    });
+  });
+
+  // ── Story 6.18: command editor dispatch (AC1/AC2) ──────────────────────────
+  //
+  // Verifies that HostShell routes kind="command" + mode="editor" to
+  // AssetEditorView (the flip added in Story 6.18) and that kind="command" +
+  // mode="detail" still routes to AssetDetailView (regression guard).
+  //
+  // AssetEditorView performs async file loading on mount — it renders a
+  // loading spinner while invoke("fs_read_file") is in flight. The Tauri
+  // invoke mock returns a resolved value so the spinner is visible immediately.
+  // We assert on the loading state text ("Loading…") as the stable surface
+  // that confirms AssetEditorView was mounted (the CommandsLibraryView would
+  // render the library section, not a loading spinner).
+
+  describe("command kind-dispatch — Story 6.18 (AC1/AC2)", () => {
+    it("renders AssetEditorView (loading state) when activeItemId='commands' + kind='command' + mode='editor'", () => {
+      useActiveNav.setState({ activeItemId: "commands" });
+      useAssetNav.setState({
+        kind: "command",
+        selectedAssetId: "/Users/testuser/.claude/commands/my-cmd.md",
+        mode: "editor",
+        dirtyByKey: {},
+      });
+      renderWithQuery(<HostShell />);
+      // AssetEditorView renders a loading spinner while fs_read_file is in flight.
+      // The Commands library section must NOT be visible.
+      expect(screen.queryByRole("region", { name: "Commands library" })).toBeNull();
+      // Loading text from AssetEditorView's loading state
+      expect(screen.getByText("Loading…")).toBeDefined();
+    });
+
+    it("still renders AssetDetailView when activeItemId='commands' + kind='command' + mode='detail' (regression guard)", () => {
+      useActiveNav.setState({ activeItemId: "commands" });
+      useAssetNav.setState({
+        kind: "command",
+        selectedAssetId: "/Users/testuser/.claude/commands/my-cmd.md",
+        mode: "detail",
+        dirtyByKey: {},
+      });
+      renderWithQuery(<HostShell />);
+      // AssetDetailView renders a loading state too; the library section must be absent.
+      expect(screen.queryByRole("region", { name: "Commands library" })).toBeNull();
+    });
+
+    it("still renders CommandsLibraryView when activeItemId='commands' + mode='library'", () => {
+      useActiveNav.setState({ activeItemId: "commands" });
+      useAssetNav.setState({
+        kind: "command",
+        selectedAssetId: null,
+        mode: "library",
+        dirtyByKey: {},
+      });
+      renderWithQuery(<HostShell />);
+      expect(screen.getByRole("region", { name: "Commands library" })).toBeDefined();
     });
   });
 

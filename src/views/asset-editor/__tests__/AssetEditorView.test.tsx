@@ -270,3 +270,160 @@ describe("AssetEditorView — internal_error → inline banner, no Toast", () =>
     expect(mockToastError).not.toHaveBeenCalled();
   });
 });
+
+// ---------------------------------------------------------------------------
+// Story 6.18 AC6 — discard-confirmation dirty-detection regression tests
+//
+// Root cause: setOriginalContent was called with the RAW file bytes (after
+// CRLF→LF), but dirty = buildFileContent(fm, body) !== originalContent uses
+// a RE-SERIALIZED form. Agents with rich front-matter (tools arrays, model,
+// voice_id) diverge on round-trip → spuriously dirty on load. Fix: baseline
+// against the serialized form so raw ≠ re-serialized divergence cancels out.
+//
+// These tests verify:
+//   (a) Agent fixture WITH a tools array loads as dirty=false (no dialog on Cancel)
+//   (b) Mutating a front-matter field on the agent fixture flips dirty=true
+//   (c) Skill fixture loads as dirty=false (regression guard)
+// ---------------------------------------------------------------------------
+
+const AGENT_FILE_CONTENT_WITH_TOOLS = `---
+name: my-agent
+description: A test agent.
+model: claude-opus-4-5
+tools:
+  - Read
+  - Write
+  - Bash
+---
+
+This is the agent body.
+`;
+
+const SKILL_FILE_CONTENT = `---
+name: my-skill
+description: A test skill.
+---
+
+This is the skill body.
+`;
+
+// MEDIUM 1: command fixture for AC6 dirty-detection consistency check.
+// Commands have simple name + description front-matter (no tools array / model).
+const COMMAND_FILE_CONTENT = `---
+name: my-command
+description: A test command.
+---
+
+This is the command body.
+`;
+
+describe("AssetEditorView — AC6 dirty-detection regression (Story 6.18)", () => {
+  it("agent fixture with tools array loads as dirty=false (no spurious discard dialog)", async () => {
+    // Open editor with an agent that has a tools array.
+    useAssetNav.setState({
+      kind: "agent",
+      selectedAssetId: "/Users/testuser/.claude/agents/my-agent.md",
+      mode: "editor",
+      dirtyByKey: {},
+    });
+    mockInvoke.mockResolvedValueOnce(encodeUtf8(AGENT_FILE_CONTENT_WITH_TOOLS));
+
+    render(<AssetEditorView />);
+
+    await waitFor(() => {
+      expect(screen.getByRole("button", { name: /save/i })).toBeDefined();
+    });
+
+    // Cancel button triggers handleBack() — if dirty=false it navigates back
+    // directly without opening the discard dialog. If the dialog DOES appear,
+    // "Discard unsaved changes?" text would be present in the DOM.
+    act(() => {
+      fireEvent.click(screen.getByRole("button", { name: /cancel/i }));
+    });
+
+    // Discard dialog must NOT have opened — no spurious dirty state.
+    expect(screen.queryByText("Discard unsaved changes?")).toBeNull();
+  });
+
+  it("skill fixture loads as dirty=false (regression guard)", async () => {
+    useAssetNav.setState({
+      kind: "skill",
+      selectedAssetId: "/Users/testuser/.claude/skills/my-skill.md",
+      mode: "editor",
+      dirtyByKey: {},
+    });
+    mockInvoke.mockResolvedValueOnce(encodeUtf8(SKILL_FILE_CONTENT));
+
+    render(<AssetEditorView />);
+
+    await waitFor(() => {
+      expect(screen.getByRole("button", { name: /save/i })).toBeDefined();
+    });
+
+    act(() => {
+      fireEvent.click(screen.getByRole("button", { name: /cancel/i }));
+    });
+
+    expect(screen.queryByText("Discard unsaved changes?")).toBeNull();
+  });
+
+  // MEDIUM 1: AC6 requires skill/agent/COMMAND consistency. Command fixture with
+  // simple front-matter (no tools array / model) must also load as dirty=false.
+  it("command fixture loads as dirty=false (AC6 kind consistency)", async () => {
+    useAssetNav.setState({
+      kind: "command",
+      selectedAssetId: "/Users/testuser/.claude/commands/my-command.md",
+      mode: "editor",
+      dirtyByKey: {},
+    });
+    mockInvoke.mockResolvedValueOnce(encodeUtf8(COMMAND_FILE_CONTENT));
+
+    render(<AssetEditorView />);
+
+    await waitFor(() => {
+      expect(screen.getByRole("button", { name: /save/i })).toBeDefined();
+    });
+
+    act(() => {
+      fireEvent.click(screen.getByRole("button", { name: /cancel/i }));
+    });
+
+    // Cancel must navigate back directly — no discard dialog for a clean load.
+    expect(screen.queryByText("Discard unsaved changes?")).toBeNull();
+  });
+
+  it("agent fixture with tools array becomes dirty=true after a front-matter field mutation", async () => {
+    useAssetNav.setState({
+      kind: "agent",
+      selectedAssetId: "/Users/testuser/.claude/agents/my-agent.md",
+      mode: "editor",
+      dirtyByKey: {},
+    });
+    mockInvoke.mockResolvedValueOnce(encodeUtf8(AGENT_FILE_CONTENT_WITH_TOOLS));
+
+    render(<AssetEditorView />);
+
+    await waitFor(() => {
+      expect(screen.getByRole("button", { name: /save/i })).toBeDefined();
+    });
+
+    // Mutate the name field to simulate a genuine edit.
+    // Use data-field attribute selector because the form has multiple text inputs
+    // and /name/i also matches voice_name.
+
+    const nameInput = document.querySelector<HTMLInputElement>('[data-field="name"]')!;
+    expect(nameInput).toBeDefined();
+    act(() => {
+      fireEvent.change(nameInput, { target: { value: "my-agent-edited" } });
+    });
+
+    // Now Cancel must open the discard dialog because dirty=true.
+    act(() => {
+      fireEvent.click(screen.getByRole("button", { name: /cancel/i }));
+    });
+
+    await waitFor(() => {
+      expect(screen.queryByText("Discard unsaved changes?")).toBeDefined();
+    });
+  });
+});

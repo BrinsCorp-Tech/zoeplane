@@ -45,6 +45,7 @@ import type {
   FrontMatterErrors,
 } from "@/components/ui/FrontMatterForm/FrontMatterForm";
 import { useAssetNav } from "@/stores/asset-nav";
+import { useAppStore } from "@/stores/app";
 import { getSidecarBaseUrl } from "@/lib/sidecar-client";
 import { toast } from "@/components/ui/Toast/Toast";
 import type { AssetSummary } from "@zoeplane/shared-types";
@@ -224,6 +225,9 @@ const EDITOR_HEADING_ID = "asset-editor-heading";
 
 export function AssetEditorView(): React.JSX.Element {
   const { kind, selectedAssetId, back, setMode, setDirty, clearDirty } = useAssetNav();
+  // Story 6.18 AC3: pass active project root to write_asset_file so project-scoped
+  // command writes are accepted by the dual-root path-lock in asset_files.rs.
+  const projectRoot = useAppStore((s) => s.projectRoot);
 
   // ── State ──────────────────────────────────────────────────────────────────
   const [frontMatter, setFrontMatter] = React.useState<AssetFrontMatter>({});
@@ -294,6 +298,9 @@ export function AssetEditorView(): React.JSX.Element {
   }, [status]);
 
   // Cmd-S global save shortcut
+  // MEDIUM-2: projectRoot is in the dep array to prevent a stale closure when
+  // the user switches projects while the editor is open — the next Cmd-S must
+  // use the current projectRoot, not the one captured at mount time.
   React.useEffect(() => {
     function handleKeyDown(e: KeyboardEvent) {
       if ((e.metaKey || e.ctrlKey) && e.key === "s") {
@@ -305,7 +312,7 @@ export function AssetEditorView(): React.JSX.Element {
     return () => {
       window.removeEventListener("keydown", handleKeyDown);
     };
-  }, [frontMatter, body, sourcePath]);
+  }, [frontMatter, body, sourcePath, projectRoot]);
 
   // ── Load asset file ────────────────────────────────────────────────────────
   React.useEffect(() => {
@@ -352,7 +359,6 @@ export function AssetEditorView(): React.JSX.Element {
         const text = new TextDecoder().decode(new Uint8Array(bytes));
         // CRLF → LF at entry
         const normalized = text.replace(/\r\n/g, "\n");
-        setOriginalContent(normalized);
 
         // Parse into FM + body
         const FM_RE = /^---\s*\n([\s\S]*?)---\s*\n?([\s\S]*)$/;
@@ -394,8 +400,18 @@ export function AssetEditorView(): React.JSX.Element {
           i++;
         }
 
+        const trimmedBody = bodyText.trim();
         setFrontMatter(fm);
-        setBody(bodyText.trim());
+        setBody(trimmedBody);
+        // Story 6.18 AC6 — dirty-detection fix: baseline against the SERIALIZED form,
+        // not the raw file text. Raw text rarely byte-matches re-serialized output
+        // (different quoting, key order, array style, trailing newlines) — agents with
+        // rich front-matter (tools arrays, model, voice_id) would always load as
+        // spuriously-dirty and trigger the discard dialog immediately.
+        // Setting the baseline to buildFileContent(fm, trimmedBody) here mirrors the
+        // post-save baseline set at `setOriginalContent(content)` after a successful
+        // write — making dirty=false for a freshly-loaded unedited file of any kind.
+        setOriginalContent(buildFileContent(fm, trimmedBody));
         setLoadState("loaded");
       } catch (err: unknown) {
         const msg = err instanceof Error ? err.message : String(err);
@@ -436,6 +452,10 @@ export function AssetEditorView(): React.JSX.Element {
         kind,
         path: sourcePath,
         content,
+        // Story 6.18 AC3/AC5: dual-root path-lock — pass active project root so
+        // project-scoped command writes are accepted. null → global-only lock
+        // (unchanged behavior for skills/agents without an active project).
+        projectRoot: projectRoot ?? null,
       });
 
       if (!result.ok) {
